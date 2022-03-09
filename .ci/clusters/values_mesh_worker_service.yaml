@@ -108,9 +108,9 @@ functions:
       sinkEnabled: true
       sourceEnabled: true
       functionRunnerImages:
-        "JAVA": streamnative/pulsar-functions-java-runner:2.8.1.26
-        "PYTHON": streamnative/pulsar-functions-python-runner:2.8.1.26
-        "GO": streamnative/pulsar-functions-go-runner:2.8.1.26
+        "JAVA": streamnative/pulsar-functions-java-runner:2.8.2.11
+        "PYTHON": streamnative/pulsar-functions-python-runner:2.8.2.11
+        "GO": streamnative/pulsar-functions-go-runner:2.8.2.11
 
 broker:
   replicaCount: 1
