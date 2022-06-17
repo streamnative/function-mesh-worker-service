@@ -46,6 +46,9 @@ function ci::delete_cluster() {
 }
 
 function ci::cleanup() {
+    echo "Print events logs ..."
+    ${KUBECTL} -n default get events --sort-by='{.lastTimestamp}'
+
     echo "Clean up kind clusters ..."
     clusters=( $(kind get clusters | grep sn-platform) )
     for cluster in "${clusters[@]}"
@@ -133,7 +136,7 @@ function ci::install_function_mesh_charts() {
   fi
   git clone --branch ${FMV} https://github.com/streamnative/function-mesh function-mesh
   cd function-mesh/charts/
-  ${HELM} install function-mesh --values ./function-mesh-operator/values.yaml ./function-mesh-operator --debug -n ${NAMESPACE}
+  ${HELM} install function-mesh --values ./function-mesh-operator/values.yaml ./function-mesh-operator --debug -n ${NAMESPACE} --timeout 1m
 
   echo "wait until controller-manager is alive"
   ${KUBECTL} get deployment -n ${NAMESPACE}
