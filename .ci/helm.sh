@@ -78,6 +78,15 @@ function ci::install_metrics_server() {
     done
 }
 
+function ci::install_cert_manager_charts() {
+    echo "Installing the cert manager charts ..."
+    ${HELM} repo add jetstack https://charts.jetstack.io
+    ${HELM} repo update
+    ${HELM} install cert-manager jetstack/cert-manager --set installCRDs=true
+    echo "wait until cert-manager is alive"
+    ${KUBECTL} wait --for condition=available --timeout=360s deployment/cert-manager
+}
+
 function ci::install_pulsar_charts() {
     echo "Installing the pulsar charts ..."
     values=${1:-".ci/clusters/values.yaml"}

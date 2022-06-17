@@ -43,6 +43,9 @@ fi
 # install metrics server
 #ci::install_metrics_server
 
+# install cert manager chart
+ci::install_cert_manager_charts
+
 # install pulsar chart
 ci::install_pulsar_charts "$VALUES_FILE"
 
