@@ -136,7 +136,8 @@ function ci::install_function_mesh_charts() {
   fi
   git clone --branch ${FMV} https://github.com/streamnative/function-mesh function-mesh
   cd function-mesh/charts/
-  ${HELM} install function-mesh --values ./function-mesh-operator/values.yaml ./function-mesh-operator --debug -n ${NAMESPACE} --timeout 1m
+  helm dependency update ./function-mesh-operator
+  ${HELM} install function-mesh --values ./function-mesh-operator/values.yaml ./function-mesh-operator
 
   echo "wait until controller-manager is alive"
   ${KUBECTL} get deployment -n ${NAMESPACE}
