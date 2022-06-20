@@ -556,10 +556,11 @@ function ci::create_source_by_upload() {
     echo ${WC};
     sleep 20
     ${KUBECTL} get pods -n ${NAMESPACE}
-    ${KUBECTL} describe pod package-upload-source-source-0
+    ${KUBECTL} describe pod package-upload-source-2c1626bf-source-0
+    ${KUBECTL} get pod package-upload-source-2c1626bf-source-0 -o yaml
     WC=$(${KUBECTL} get pods -n ${NAMESPACE} --field-selector=status.phase=Running | grep "package-upload-source" | wc -l)
   done
-  RET=$(${KUBECTL} get pod package-upload-source-source-0 -o yaml)
+  RET=$(${KUBECTL} get pod package-upload-source-2c1626bf-source-0 -o yaml)
   echo "${RET}"
   echo "source test done"
   RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sources delete --name package-upload-source)

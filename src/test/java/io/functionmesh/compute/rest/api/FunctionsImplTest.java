@@ -339,7 +339,7 @@ public class FunctionsImplTest {
         Response response = PowerMockito.mock(Response.class);
         ResponseBody responseBody = PowerMockito.mock(RealResponseBody.class);
         ApiClient apiClient = PowerMockito.mock(ApiClient.class);
-        PowerMockito.stub(PowerMockito.method(FunctionsUtil.class, "downloadPackageFile")).toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
         PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
                 .toReturn("word-count.jar");
 
@@ -572,7 +572,7 @@ public class FunctionsImplTest {
         PowerMockito.when(meshWorkerService.getMeshWorkerServiceCustomConfig())
                 .thenReturn(meshWorkerServiceCustomConfig);
 
-        PowerMockito.stub(PowerMockito.method(FunctionsUtil.class, "downloadPackageFile")).toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
         PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
                 .toReturn("word-count.jar");
         PowerMockito.stub(PowerMockito.method(PackageManagementServiceUtil.class, "deletePackageFromPackageService"))

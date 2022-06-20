@@ -449,6 +449,7 @@ public class SinksImpTest {
         sinkConfig.setResources(resources);
         sinkConfig.setCustomRuntimeOptions(customRuntimeOptions);
         sinkConfig.setAutoAck(autoAck);
+        sinkConfig.setClassName("test.org.Test");
 
         MeshWorkerService meshWorkerService =
                 PowerMockito.mock(MeshWorkerService.class);

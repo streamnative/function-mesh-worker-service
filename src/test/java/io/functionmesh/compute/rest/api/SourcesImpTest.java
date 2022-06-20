@@ -257,6 +257,7 @@ public class SourcesImpTest {
         resources.setCpu(cpu);
         sourceConfig.setResources(resources);
         sourceConfig.setCustomRuntimeOptions(customRuntimeOptions);
+        sourceConfig.setClassName("test.org.Test");
 
         PowerMockito.when(tenants.getTenantInfo(tenant)).thenReturn(null);
         V1alpha1Source v1alpha1Source =

@@ -85,7 +85,7 @@ public class FunctionsUtilTest {
         PowerMockito.when(workerConfig.getFunctionsWorkerServiceCustomConfigs()).thenReturn(Collections.emptyMap());
         PulsarAdmin pulsarAdmin = PowerMockito.mock(PulsarAdmin.class);
         PowerMockito.when(meshWorkerService.getBrokerAdmin()).thenReturn(pulsarAdmin);
-        PowerMockito.stub(PowerMockito.method(FunctionsUtil.class, "downloadPackageFile")).toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
         PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata")).toReturn(null);
 
         MeshWorkerServiceCustomConfig meshWorkerServiceCustomConfig =
@@ -148,7 +148,7 @@ public class FunctionsUtilTest {
         PowerMockito.when(workerConfig.getFunctionsWorkerServiceCustomConfigs()).thenReturn(Collections.emptyMap());
         PulsarAdmin pulsarAdmin = PowerMockito.mock(PulsarAdmin.class);
         PowerMockito.when(meshWorkerService.getBrokerAdmin()).thenReturn(pulsarAdmin);
-        PowerMockito.stub(PowerMockito.method(FunctionsUtil.class, "downloadPackageFile")).toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
         PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
                 .toReturn("word-count.jar");
 
