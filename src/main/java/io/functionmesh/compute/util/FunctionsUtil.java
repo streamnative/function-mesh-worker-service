@@ -22,6 +22,7 @@ import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
 import static io.functionmesh.compute.util.CommonUtil.DEFAULT_FUNCTION_EXECUTABLE;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
+import static io.functionmesh.compute.util.CommonUtil.downloadPackageFile;
 import static io.functionmesh.compute.util.CommonUtil.getCustomLabelClaims;
 import static io.functionmesh.compute.util.CommonUtil.getExceptionInformation;
 import com.google.gson.Gson;
@@ -44,9 +45,6 @@ import io.functionmesh.compute.models.CustomRuntimeOptions;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
 import io.kubernetes.client.custom.Quantity;
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -55,10 +53,8 @@ import java.util.List;
 import java.util.Map;
 import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
-import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.common.functions.ConsumerConfig;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.ProducerConfig;
@@ -668,28 +664,6 @@ public class FunctionsUtil {
 
         statusData.setAverageLatency(functionStatus.getAverageLatency());
         statusData.setLastInvocationTime(functionStatus.getLastInvocationTime());
-    }
-
-    private static File downloadPackageFile(MeshWorkerService worker, String packageName)
-            throws IOException, PulsarAdminException {
-        Path tempDirectory;
-        if (worker.getWorkerConfig().getDownloadDirectory() != null) {
-            tempDirectory = Paths.get(worker.getWorkerConfig().getDownloadDirectory());
-        } else {
-            // use the Nar extraction directory as a temporary directory for downloaded files
-            tempDirectory = Paths.get(worker.getWorkerConfig().getNarExtractionDirectory());
-        }
-        if (Files.notExists(tempDirectory)) {
-            Files.createDirectories(tempDirectory);
-        }
-        String fileName = String.format("function-%s.tmp", RandomStringUtils.random(5, true, true).toLowerCase());
-        if (CommonUtil.getFilenameFromPackageMetadata(packageName, worker.getBrokerAdmin()) != null) {
-            fileName = CommonUtil.getFilenameFromPackageMetadata(packageName, worker.getBrokerAdmin());
-        }
-        Path filePath = Paths.get(tempDirectory.toString(), fileName);
-        Files.deleteIfExists(filePath);
-        worker.getBrokerAdmin().packages().download(packageName, filePath.toString());
-        return filePath.toFile();
     }
 
     private static Class<?>[] extractTypeArgs(final FunctionConfig functionConfig,

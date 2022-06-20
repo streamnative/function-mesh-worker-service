@@ -21,13 +21,12 @@ package io.functionmesh.compute.util;
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
+import static io.functionmesh.compute.util.CommonUtil.getClassNameFromFile;
 import static io.functionmesh.compute.util.CommonUtil.getCustomLabelClaims;
 import static io.functionmesh.compute.util.CommonUtil.getExceptionInformation;
 import static org.apache.pulsar.common.functions.Utils.BUILTIN;
 import com.google.gson.Gson;
 import io.functionmesh.compute.MeshWorkerService;
-import io.functionmesh.compute.functions.models.V1alpha1Function;
-import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecPod;
 import io.functionmesh.compute.models.CustomRuntimeOptions;
 import io.functionmesh.compute.models.FunctionMeshConnectorDefinition;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
@@ -55,7 +54,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.pulsar.common.functions.ConsumerConfig;
-import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.Resources;
 import org.apache.pulsar.common.io.SinkConfig;
 import org.apache.pulsar.common.policies.data.ExceptionInformation;
@@ -355,6 +353,25 @@ public class SinksUtil {
             }
             if (!secretsMapMap.isEmpty()) {
                 v1alpha1SinkSpec.setSecretsMap(secretsMapMap);
+            }
+        }
+
+        if (StringUtils.isEmpty(v1alpha1SinkSpec.getClassName())) {
+            boolean isPkgUrlProvided = StringUtils.isNotEmpty(sinkPkgUrl);
+            if (isPkgUrlProvided) {
+                try {
+                    String className = getClassNameFromFile(worker, sinkPkgUrl,
+                            Function.FunctionDetails.ComponentType.SINK);
+                    if (StringUtils.isNotEmpty(className)) {
+                        v1alpha1SinkSpec.setClassName(className);
+                    }
+                } catch (Exception e) {
+                    log.error("Invalid register sink request {}", sinkName, e);
+                    throw new RestException(Response.Status.BAD_REQUEST, e.getMessage());
+                }
+            } else {
+                log.error("Invalid register sink request {}: not provide className", sinkName);
+                throw new RestException(Response.Status.BAD_REQUEST, "no className provided");
             }
         }
 

@@ -21,15 +21,14 @@ package io.functionmesh.compute.util;
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
+import static io.functionmesh.compute.util.CommonUtil.getClassNameFromFile;
 import static io.functionmesh.compute.util.CommonUtil.getCustomLabelClaims;
 import static org.apache.pulsar.common.functions.Utils.BUILTIN;
 import com.google.gson.Gson;
 import io.functionmesh.compute.MeshWorkerService;
-import io.functionmesh.compute.functions.models.V1alpha1Function;
 import io.functionmesh.compute.models.CustomRuntimeOptions;
 import io.functionmesh.compute.models.FunctionMeshConnectorDefinition;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkSpecPod;
 import io.functionmesh.compute.sources.models.V1alpha1Source;
 import io.functionmesh.compute.sources.models.V1alpha1SourceSpec;
 import io.functionmesh.compute.sources.models.V1alpha1SourceSpecJava;
@@ -52,7 +51,6 @@ import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
-import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.ProducerConfig;
 import org.apache.pulsar.common.functions.Resources;
 import org.apache.pulsar.common.io.SourceConfig;
@@ -315,6 +313,25 @@ public class SourcesUtil {
             }
             if (!secretsMapMap.isEmpty()) {
                 v1alpha1SourceSpec.setSecretsMap(secretsMapMap);
+            }
+        }
+
+        if (StringUtils.isEmpty(v1alpha1SourceSpec.getClassName())) {
+            boolean isPkgUrlProvided = StringUtils.isNotEmpty(sourcePkgUrl);
+            if (isPkgUrlProvided) {
+                try {
+                    String className = getClassNameFromFile(worker, sourcePkgUrl,
+                            Function.FunctionDetails.ComponentType.SOURCE);
+                    if (StringUtils.isNotEmpty(className)) {
+                        v1alpha1SourceSpec.setClassName(className);
+                    }
+                } catch (Exception e) {
+                    log.error("Invalid register source request {}", sourceName, e);
+                    throw new RestException(Response.Status.BAD_REQUEST, e.getMessage());
+                }
+            } else {
+                log.error("Invalid register source request {}: not provide className", sourceName);
+                throw new RestException(Response.Status.BAD_REQUEST, "no className provided");
             }
         }
 

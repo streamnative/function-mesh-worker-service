@@ -32,6 +32,9 @@ import io.functionmesh.compute.models.CustomRuntimeOptions;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
 import io.kubernetes.client.openapi.models.V1OwnerReference;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
@@ -42,18 +45,24 @@ import java.util.stream.Collectors;
 import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.PulsarAdminException;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.Resources;
+import org.apache.pulsar.common.functions.Utils;
+import org.apache.pulsar.common.nar.NarClassLoader;
 import org.apache.pulsar.common.policies.data.ExceptionInformation;
 import org.apache.pulsar.common.policies.data.FunctionInstanceStatsDataImpl;
 import org.apache.pulsar.common.policies.data.FunctionInstanceStatsImpl;
 import org.apache.pulsar.common.util.RestException;
+import org.apache.pulsar.functions.proto.Function;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
 import org.apache.pulsar.functions.proto.InstanceControlGrpc;
+import org.apache.pulsar.functions.utils.FunctionCommon;
+import org.apache.pulsar.functions.utils.io.ConnectorUtils;
 import org.apache.pulsar.packages.management.core.common.PackageMetadata;
 
 @Slf4j
@@ -401,4 +410,64 @@ public class CommonUtil {
 
         return new Resources(cpu, ram, disk);
     }
+    public static File downloadPackageFile(MeshWorkerService worker, String packageName)
+            throws IOException, PulsarAdminException {
+        Path tempDirectory;
+        if (worker.getWorkerConfig().getDownloadDirectory() != null) {
+            tempDirectory = Paths.get(worker.getWorkerConfig().getDownloadDirectory());
+        } else {
+            // use the Nar extraction directory as a temporary directory for downloaded files
+            tempDirectory = Paths.get(worker.getWorkerConfig().getNarExtractionDirectory());
+        }
+        if (Files.notExists(tempDirectory)) {
+            Files.createDirectories(tempDirectory);
+        }
+        String fileName = String.format("function-%s.tmp", RandomStringUtils.random(5, true, true).toLowerCase());
+        if (CommonUtil.getFilenameFromPackageMetadata(packageName, worker.getBrokerAdmin()) != null) {
+            fileName = CommonUtil.getFilenameFromPackageMetadata(packageName, worker.getBrokerAdmin());
+        }
+        Path filePath = Paths.get(tempDirectory.toString(), fileName);
+        Files.deleteIfExists(filePath);
+        worker.getBrokerAdmin().packages().download(packageName, filePath.toString());
+        return filePath.toFile();
+    }
+
+    public static String getClassNameFromFile(MeshWorkerService worker, String packageUrl,
+                                              Function.FunctionDetails.ComponentType componentType) throws Exception {
+        boolean isPkgUrlProvided = StringUtils.isNotEmpty(packageUrl);
+        File componentPackageFile = null;
+        if (isPkgUrlProvided) {
+            if (Utils.hasPackageTypePrefix(packageUrl)) {
+                componentPackageFile = downloadPackageFile(worker, packageUrl);
+            } else {
+                log.warn("get unsupported package url {}", packageUrl);
+                throw new IllegalArgumentException(
+                        "Function Package url is not valid. supported url (function/sink/source)");
+            }
+        }
+
+        if (componentPackageFile != null) {
+            try {
+                ClassLoader clsLoader = FunctionCommon.getClassLoaderFromPackage(
+                        Function.FunctionDetails.ComponentType.SINK,
+                        null, componentPackageFile, worker.getWorkerConfig().getNarExtractionDirectory());
+                String className = null;
+                if (componentType == Function.FunctionDetails.ComponentType.SINK) {
+                    className = ConnectorUtils.getIOSinkClass((NarClassLoader) clsLoader);
+                } else if (componentType == Function.FunctionDetails.ComponentType.SOURCE) {
+                    className = ConnectorUtils.getIOSourceClass((NarClassLoader) clsLoader);
+                }
+                if (StringUtils.isNotEmpty(className)) {
+                    return className;
+                }
+            } catch (Exception e) {
+                throw new RestException(Response.Status.BAD_REQUEST, e.getMessage());
+            } finally {
+                componentPackageFile.delete();
+            }
+        }
+
+        return null;
+    }
+
 }
