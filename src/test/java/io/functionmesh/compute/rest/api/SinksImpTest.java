@@ -255,6 +255,7 @@ public class SinksImpTest {
         sinkConfig.setResources(resources);
         sinkConfig.setCustomRuntimeOptions(customRuntimeOptions);
         sinkConfig.setAutoAck(autoAck);
+        sinkConfig.setClassName("test.org.Test");
 
         PowerMockito.when(tenants.getTenantInfo(tenant)).thenReturn(null);
 

@@ -586,10 +586,10 @@ function ci::create_sink_by_upload() {
     echo ${WC};
     sleep 20
     ${KUBECTL} get pods -n ${NAMESPACE}
-    ${KUBECTL} describe pod package-upload-sink-sink-0
+    ${KUBECTL} describe pod package-upload-sink-21a402bf-sink-0
     WC=$(${KUBECTL} get pods -n ${NAMESPACE} --field-selector=status.phase=Running | grep "package-upload-sink" | wc -l)
   done
-  RET=$(${KUBECTL} get pod package-upload-sink-sink-0 -o yaml)
+  RET=$(${KUBECTL} get pod package-upload-sink-21a402bf-sink-0 -o yaml)
   echo "${RET}"
   echo "sink test done"
   RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sinks delete --name package-upload-sink)
