@@ -560,8 +560,11 @@ function ci::create_source_by_upload() {
     ${KUBECTL} get pod package-upload-source-2c1626bf-source-0 -o yaml
     WC=$(${KUBECTL} get pods -n ${NAMESPACE} --field-selector=status.phase=Running | grep "package-upload-source" | wc -l)
   done
-  RET=$(${KUBECTL} get pod package-upload-source-2c1626bf-source-0 -o yaml)
+  RESOURCENAME=$(${KUBECTL} get sources --no-headers -o custom-columns=":metadata.name" | grep "package-upload-source")
+  echo "${RESOURCENAME}"
+  RET=$(${KUBECTL} get sources ${RESOURCENAME} -o json | jq .spec.className)
   echo "${RET}"
+  [[ -z "${RET}" ]] && { echo "className is empty" ; exit 1; }
   echo "source test done"
   RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sources delete --name package-upload-source)
   echo "${RET}"
@@ -589,8 +592,11 @@ function ci::create_sink_by_upload() {
     ${KUBECTL} describe pod package-upload-sink-21a402bf-sink-0
     WC=$(${KUBECTL} get pods -n ${NAMESPACE} --field-selector=status.phase=Running | grep "package-upload-sink" | wc -l)
   done
-  RET=$(${KUBECTL} get pod package-upload-sink-21a402bf-sink-0 -o yaml)
+  RESOURCENAME=$(${KUBECTL} get sinks --no-headers -o custom-columns=":metadata.name" | grep "package-upload-sink")
+  echo "${RESOURCENAME}"
+  RET=$(${KUBECTL} get sinks ${RESOURCENAME} -o json | jq .spec.className)
   echo "${RET}"
+  [[ -z "${RET}" ]] && { echo "className is empty" ; exit 1; }
   echo "sink test done"
   RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sinks delete --name package-upload-sink)
   echo "${RET}"

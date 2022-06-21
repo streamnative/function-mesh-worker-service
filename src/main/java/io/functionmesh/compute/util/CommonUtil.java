@@ -448,8 +448,7 @@ public class CommonUtil {
 
         if (componentPackageFile != null) {
             try {
-                ClassLoader clsLoader = FunctionCommon.getClassLoaderFromPackage(
-                        Function.FunctionDetails.ComponentType.SINK,
+                ClassLoader clsLoader = FunctionCommon.getClassLoaderFromPackage(componentType,
                         null, componentPackageFile, worker.getWorkerConfig().getNarExtractionDirectory());
                 String className = null;
                 if (componentType == Function.FunctionDetails.ComponentType.SINK) {

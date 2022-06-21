@@ -488,6 +488,7 @@ public class SourcesImpTest {
         resources.setCpu(cpu);
         sourceConfig.setResources(resources);
         sourceConfig.setCustomRuntimeOptions(customRuntimeOptions);
+        sourceConfig.setClassName("test.org.Test");
 
         MeshWorkerService meshWorkerService =
                 PowerMockito.mock(MeshWorkerService.class);
