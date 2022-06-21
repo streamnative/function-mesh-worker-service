@@ -556,7 +556,7 @@ function ci::verify_secrets_python_package() {
 function ci::create_source_by_upload() {
   ${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- cat conf/functions_worker.yml
   PULSAR_IO_DATA_GENERATOR=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- ls connectors | grep pulsar-io-data-generator)
-  RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sources create -a /pulsar/connectors/${PULSAR_IO_DATA_GENERATOR} --name package-upload-source --destination-topic-name persistent://public/default/package-upload-connector-topic --custom-runtime-options '{"outputTypeClassName": "java.nio.ByteBuffer"}' --classname "org.apache.pulsar.io.datagenerator")
+  RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sources create -a /pulsar/connectors/${PULSAR_IO_DATA_GENERATOR} --name package-upload-source --destination-topic-name persistent://public/default/package-upload-connector-topic --custom-runtime-options '{"outputTypeClassName": "java.nio.ByteBuffer"}')
   ${KUBECTL} logs -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0
   sleep 15
   echo "${RET}"
@@ -589,7 +589,7 @@ function ci::create_source_by_upload() {
 
 function ci::create_sink_by_upload() {
   PULSAR_IO_DATA_GENERATOR=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- ls connectors | grep pulsar-io-data-generator)
-  RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sinks create -a /pulsar/connectors/${PULSAR_IO_DATA_GENERATOR} --name package-upload-sink --inputs persistent://public/default/package-upload-connector-topic --custom-runtime-options '{"inputTypeClassName": "org.apache.pulsar.io.datagenerator.Person"}' --classname "org.apache.pulsar.io.datagenerator")
+  RET=$(${KUBECTL} exec -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0 -- bin/pulsar-admin sinks create -a /pulsar/connectors/${PULSAR_IO_DATA_GENERATOR} --name package-upload-sink --inputs persistent://public/default/package-upload-connector-topic --custom-runtime-options '{"inputTypeClassName": "org.apache.pulsar.io.datagenerator.Person"}')
   ${KUBECTL} logs -n ${NAMESPACE} ${CLUSTER}-pulsar-broker-0
   sleep 15
   echo "${RET}"
