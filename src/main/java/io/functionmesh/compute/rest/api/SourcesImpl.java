@@ -436,7 +436,9 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
                                     if (containerStatus != null) {
                                         sourceInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
                                     } else {
-                                        log.warn("containerStatus is null");
+                                        log.warn("containerStatus is null, cannot get restart count for pod {}",
+                                                podName);
+                                        log.debug("existing containerStatus: {}", podStatus.getContainerStatuses());
                                     }
                                 }
                             }

@@ -455,7 +455,9 @@ public class SinksImpl extends MeshComponentImpl<V1alpha1Sink, V1alpha1SinkList>
                                     if (containerStatus != null) {
                                         sinkInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
                                     } else {
-                                        log.warn("containerStatus is null");
+                                        log.warn("containerStatus is null, cannot get restart count for pod {}",
+                                                podName);
+                                        log.debug("existing containerStatus: {}", podStatus.getContainerStatuses());
                                     }
                                 }
                             }
