@@ -283,4 +283,13 @@ public class KubernetesUtils {
         }
     }
 
+    public static V1ContainerStatus extractContainerStatusByName(String containerName, List<V1ContainerStatus> containerStatuses) {
+        for (V1ContainerStatus containerStatus : containerStatuses) {
+            if (containerStatus.getName().equals(containerName)) {
+                return containerStatus;
+            }
+        }
+        return null;
+    }
+
 }

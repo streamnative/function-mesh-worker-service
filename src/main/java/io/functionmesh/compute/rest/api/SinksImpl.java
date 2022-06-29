@@ -81,6 +81,8 @@ public class SinksImpl extends MeshComponentImpl<V1alpha1Sink, V1alpha1SinkList>
 
     private final String plural = "sinks";
 
+    private final String containerName = "pulsar-sink";
+
     public SinksImpl(Supplier<MeshWorkerService> meshWorkerServiceSupplier) {
         super(meshWorkerServiceSupplier, Function.FunctionDetails.ComponentType.SINK);
         super.apiPlural = this.plural;
@@ -447,8 +449,14 @@ public class SinksImpl extends MeshComponentImpl<V1alpha1Sink, V1alpha1SinkList>
                                 sinkInstanceStatusData.setRunning(KubernetesUtils.isPodRunning(pod));
                                 if (podStatus.getContainerStatuses() != null && !podStatus.getContainerStatuses()
                                         .isEmpty()) {
-                                    V1ContainerStatus containerStatus = podStatus.getContainerStatuses().get(0);
-                                    sinkInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
+                                    V1ContainerStatus containerStatus =
+                                            KubernetesUtils.extractContainerStatusByName(containerName,
+                                                    podStatus.getContainerStatuses());
+                                    if (containerStatus != null) {
+                                        sinkInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
+                                    } else {
+                                        log.warn("containerStatus is null");
+                                    }
                                 }
                             }
                             // get status from grpc
