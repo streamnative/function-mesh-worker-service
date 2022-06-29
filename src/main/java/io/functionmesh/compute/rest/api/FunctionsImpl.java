@@ -74,8 +74,6 @@ import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1FunctionList>
         implements Functions<MeshWorkerService> {
 
-    private final String containerName = "pulsar-function";
-
     public FunctionsImpl(Supplier<MeshWorkerService> meshWorkerServiceSupplier) {
         super(meshWorkerServiceSupplier, Function.FunctionDetails.ComponentType.FUNCTION);
         this.resourceApi = new GenericKubernetesApi<>(
@@ -541,18 +539,14 @@ public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1F
                             }
                             if (podStatus != null) {
                                 functionInstanceStatusData.setRunning(KubernetesUtils.isPodRunning(pod));
-                                if (podStatus.getContainerStatuses() != null && !podStatus.getContainerStatuses()
-                                        .isEmpty()) {
-                                    V1ContainerStatus containerStatus =
-                                            KubernetesUtils.extractContainerStatusByName(containerName,
-                                                    podStatus.getContainerStatuses());
-                                    if (containerStatus != null) {
-                                        functionInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
-                                    } else {
-                                        log.warn("containerStatus is null, cannot get restart count for pod {}",
-                                                podName);
-                                        log.debug("existing containerStatus: {}", podStatus.getContainerStatuses());
-                                    }
+                                V1ContainerStatus containerStatus =
+                                        KubernetesUtils.extractDefaultContainerStatus(pod);
+                                if (containerStatus != null) {
+                                    functionInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
+                                } else {
+                                    log.warn("containerStatus is null, cannot get restart count for pod {}",
+                                            podName);
+                                    log.debug("existing containerStatus: {}", podStatus.getContainerStatuses());
                                 }
                             }
                             // get status from grpc
