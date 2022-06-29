@@ -17,6 +17,6 @@
 # under the License.
 #
 
-FROM docker.pkg.github.com/kubernetes-client/java/crd-model-gen:v1.0.4
+FROM ghcr.io/kubernetes-client/java/crd-model-gen:v1.0.4
 RUN sed -i 's/kind create cluster/\kind create cluster --image=kindest\/node:v1.17.17/' /generate.sh
 #RUN sed -i 's/kubectl apply/\kubectl apply --validate=false/' /generate.sh
