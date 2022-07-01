@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.functions.models.V1alpha1Function;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionList;
+import io.functionmesh.compute.functions.models.V1alpha1FunctionSpec;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionStatus;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
@@ -56,7 +57,7 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-public class FunctionImplTestRe {
+public class FunctionImplV2Test {
 
     private static final String tenant = "test-tenant";
     private static final String namespace = "test-namespace";
@@ -166,9 +167,11 @@ public class FunctionImplTestRe {
         V1alpha1Function functionResource = mock(V1alpha1Function.class);
         V1alpha1FunctionStatus functionStatus = mock(V1alpha1FunctionStatus.class);
         V1ObjectMeta functionMeta = mock(V1ObjectMeta.class);
+        V1alpha1FunctionSpec functionSpec = mock(V1alpha1FunctionSpec.class);
 
         when(functionResource.getStatus()).thenReturn(functionStatus);
         when(functionResource.getMetadata()).thenReturn(functionMeta);
+        when(functionResource.getSpec()).thenReturn(functionSpec);
 
         when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
         doReturn(Collections.singleton(CompletableFuture.completedFuture(
