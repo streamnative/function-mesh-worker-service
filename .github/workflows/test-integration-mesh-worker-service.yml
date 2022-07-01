@@ -39,7 +39,7 @@ jobs:
       - name: Login to GitHub Packages Docker Registry
         uses: docker/login-action@v1
         with:
-          registry: docker.pkg.github.com
+          registry: ghcr.io
           username: tuteng
           password: ${{ secrets.IMAGE_GITHUB_TOKEN }}
 

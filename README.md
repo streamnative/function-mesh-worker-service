@@ -144,7 +144,7 @@ docker run \
   -v "$(pwd)":"$(pwd)" \
   -ti \
   --network host \
-  docker.pkg.github.com/kubernetes-client/java/crd-model-gen:v1.0.3 \
+  ghcr.io/kubernetes-client/java/crd-model-gen:v1.0.4 \
   /generate.sh \
   -u $LOCAL_MANIFEST_FILE \
   -n io.functionmesh.compute \
