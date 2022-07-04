@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -279,6 +279,7 @@ public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1F
         }
     }
 
+    @SuppressWarnings("checkstyle:RegexpSingleline")
     @Override
     public FunctionConfig getFunctionInfo(final String tenant,
                                           final String namespace,
@@ -294,17 +295,12 @@ public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1F
                 clientAuthenticationDataHttps,
                 ComponentTypeUtils.toString(componentType));
 
-        String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
         try {
-            Call call = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    hashName,
-                    null
-            );
-            V1alpha1Function v1alpha1Function = executeCall(call, V1alpha1Function.class);
+            String nameSpaceName = worker().getJobNamespace();
+            String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
+
+            V1alpha1Function v1alpha1Function = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+
             return FunctionsUtil.createFunctionConfigFromV1alpha1Function(tenant, namespace, componentName,
                     v1alpha1Function);
         } catch (Exception e) {

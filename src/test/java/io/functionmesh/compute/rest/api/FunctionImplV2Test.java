@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -18,17 +18,26 @@
  */
 package io.functionmesh.compute.rest.api;
 
+import static io.functionmesh.compute.util.FunctionsUtil.CPU_KEY;
+import static io.functionmesh.compute.util.FunctionsUtil.MEMORY_KEY;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
+import com.google.gson.Gson;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.functions.models.V1alpha1Function;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionList;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionSpec;
+import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecInput;
+import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecJava;
+import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecOutput;
+import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecPod;
+import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecPodResources;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionStatus;
+import io.functionmesh.compute.models.CustomRuntimeOptions;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
 import io.kubernetes.client.openapi.models.V1Pod;
@@ -40,15 +49,21 @@ import io.kubernetes.client.openapi.models.V1StatefulSetStatus;
 import io.kubernetes.client.util.generic.GenericKubernetesApi;
 import io.kubernetes.client.util.generic.KubernetesApiResponse;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import org.apache.distributedlog.api.namespace.Namespace;
 import org.apache.pulsar.client.admin.Namespaces;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.Tenants;
+import org.apache.pulsar.common.functions.ConsumerConfig;
+import org.apache.pulsar.common.functions.FunctionConfig;
+import org.apache.pulsar.common.functions.Resources;
 import org.apache.pulsar.common.policies.data.FunctionStatsImpl;
 import org.apache.pulsar.common.policies.data.TenantInfo;
+import org.apache.pulsar.functions.proto.Function;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.junit.Assert;
@@ -62,9 +77,12 @@ public class FunctionImplV2Test {
     private static final String tenant = "test-tenant";
     private static final String namespace = "test-namespace";
     private static final String function = "test-function";
+    private static final String inputTopic = "test-input-topic";
     private static final String outputTopic = "test-output-topic";
+    private static final String logTopic = "test-log-topic";
     private static final String pulsarFunctionCluster = "test-pulsar";
     private static final String kubernetesNamespace = "test";
+    private static final String serviceAccount = "test-account";
 
     private MeshWorkerService meshWorkerService;
     private PulsarAdmin mockedPulsarAdmin;
@@ -181,4 +199,112 @@ public class FunctionImplV2Test {
         Assert.assertNotNull(functionStats);
         Assert.assertEquals(functionStats.instances.size(), 1);
     }
+
+    private V1alpha1FunctionSpec buildV1alpha1FunctionSpecForGetFunctionInfo() {
+        V1alpha1FunctionSpec functionSpec = mock(V1alpha1FunctionSpec.class);
+        V1alpha1FunctionSpecInput functionSpecInput = mock(V1alpha1FunctionSpecInput.class);
+        V1alpha1FunctionSpecOutput functionSpecOutput = mock(V1alpha1FunctionSpecOutput.class);
+        V1alpha1FunctionSpecPod functionSpecPod = mock(V1alpha1FunctionSpecPod.class);
+        V1alpha1FunctionSpecJava functionSpecJava = mock(V1alpha1FunctionSpecJava.class);
+        V1alpha1FunctionSpecPodResources functionSpecPodResources = createResource();
+
+        when(functionSpec.getReplicas()).thenReturn(1);
+        when(functionSpec.getProcessingGuarantee()).thenReturn(
+                V1alpha1FunctionSpec.ProcessingGuaranteeEnum.ATLEAST_ONCE);
+
+        when(functionSpec.getInput()).thenReturn(functionSpecInput);
+        when(functionSpecInput.getTopics()).thenReturn(Collections.singletonList(inputTopic));
+        when(functionSpec.getOutput()).thenReturn(functionSpecOutput);
+        when(functionSpecOutput.getTopic()).thenReturn(outputTopic);
+
+        when(functionSpec.getClusterName()).thenReturn(pulsarFunctionCluster);
+        when(functionSpec.getMaxReplicas()).thenReturn(2);
+
+        when(functionSpec.getPod()).thenReturn(functionSpecPod);
+        when(functionSpecPod.getServiceAccountName()).thenReturn(serviceAccount);
+
+        when(functionSpec.getSubscriptionName()).thenReturn(outputTopic);
+        when(functionSpec.getRetainKeyOrdering()).thenReturn(false);
+        when(functionSpec.getRetainOrdering()).thenReturn(false);
+        when(functionSpec.getCleanupSubscription()).thenReturn(false);
+        when(functionSpec.getAutoAck()).thenReturn(false);
+        when(functionSpec.getTimeout()).thenReturn(100);
+        when(functionSpec.getLogTopic()).thenReturn(logTopic);
+        when(functionSpec.getForwardSourceMessageProperty()).thenReturn(true);
+
+        when(functionSpec.getJava()).thenReturn(functionSpecJava);
+        when(functionSpecJava.getJar()).thenReturn("test.jar");
+        when(functionSpecJava.getJarLocation()).thenReturn("public/default/test");
+
+        when(functionSpec.getMaxMessageRetry()).thenReturn(3);
+        when(functionSpec.getClassName()).thenReturn("org.example.functions.testFunction");
+
+        when(functionSpec.getResources()).thenReturn(functionSpecPodResources);
+
+        return functionSpec;
+    }
+
+    private V1alpha1FunctionSpecPodResources createResource() {
+        V1alpha1FunctionSpecPodResources functionSpecPodResources = mock(V1alpha1FunctionSpecPodResources.class);
+        when(functionSpecPodResources.getLimits()).thenReturn(new HashMap<String, Object>() {{
+            put(CPU_KEY, "0.1");
+            put(MEMORY_KEY, "2048");
+        }});
+        return functionSpecPodResources;
+    }
+
+    private FunctionConfig expectFunctionConfig() {
+        CustomRuntimeOptions customRuntimeOptionsExpect = new CustomRuntimeOptions();
+        customRuntimeOptionsExpect.setClusterName(pulsarFunctionCluster);
+        customRuntimeOptionsExpect.setMaxReplicas(2);
+        customRuntimeOptionsExpect.setServiceAccountName(serviceAccount);
+        String customRuntimeOptionsJSON = new Gson().toJson(customRuntimeOptionsExpect, CustomRuntimeOptions.class);
+
+        Resources resourcesExpect = new Resources();
+        resourcesExpect.setCpu(0.1);
+        resourcesExpect.setRam(2048L);
+
+        Map<String, ConsumerConfig> inputSpecsExpect = new HashMap<>();
+        inputSpecsExpect.put(inputTopic, new ConsumerConfig());
+
+        return FunctionConfig.builder()
+                .name(function)
+                .namespace(namespace)
+                .tenant(tenant)
+                .parallelism(1)
+                .processingGuarantees(FunctionConfig.ProcessingGuarantees.ATLEAST_ONCE)
+                .subName(outputTopic)
+                .retainKeyOrdering(false)
+                .retainOrdering(false)
+                .cleanupSubscription(false)
+                .autoAck(false)
+                .timeoutMs(100L)
+                .inputSpecs(inputSpecsExpect)
+                .inputs(inputSpecsExpect.keySet())
+                .output(outputTopic)
+                .logTopic(logTopic)
+                .forwardSourceMessageProperty(true)
+                .runtime(FunctionConfig.Runtime.JAVA)
+                .jar("public/default/test")
+                .maxMessageRetries(3)
+                .className("org.example.functions.testFunction")
+                .resources(resourcesExpect)
+                .customRuntimeOptions(customRuntimeOptionsJSON)
+                .build();
+    }
+
+    @Test
+    public void getFunctionInfoTest() {
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        V1alpha1FunctionSpec functionSpec = buildV1alpha1FunctionSpecForGetFunctionInfo();
+
+        when(functionResource.getSpec()).thenReturn(functionSpec);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+
+        FunctionConfig functionConfig = this.resource.getFunctionInfo(tenant, namespace, function, null, null);
+        Assert.assertNotNull(functionConfig);
+        Assert.assertEquals(expectFunctionConfig(), functionConfig);
+    }
+
+
 }
