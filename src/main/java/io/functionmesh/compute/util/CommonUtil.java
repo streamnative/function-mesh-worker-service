@@ -79,6 +79,7 @@ public class CommonUtil {
     public static final String TENANT_LABEL_CLAIM = "pulsar-tenant";
     public static final String NAMESPACE_LABEL_CLAIM = "pulsar-namespace";
     public static final String COMPONENT_LABEL_CLAIM = "pulsar-component";
+    public static final String ANNOTATION_MANAGED = "compute.functionmesh.io/managed";
     private static final String CLUSTER_NAME_ENV = "clusterName";
 
     public static String getClusterNameEnv() {

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -20,6 +20,7 @@ package io.functionmesh.compute.util;
 
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
+import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import static io.functionmesh.compute.util.CommonUtil.DEFAULT_FUNCTION_EXECUTABLE;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
 import static io.functionmesh.compute.util.CommonUtil.downloadPackageFile;
@@ -234,6 +235,13 @@ public class FunctionsUtil {
         v1alpha1FunctionSpec.setReplicas(functionDetails.getParallelism());
         if (customRuntimeOptions.getMaxReplicas() > functionDetails.getParallelism()) {
             v1alpha1FunctionSpec.setMaxReplicas(customRuntimeOptions.getMaxReplicas());
+        }
+
+        if (customRuntimeOptions.isUnManaged()) {
+            Map<String, String> unManaged = new HashMap<>();
+            unManaged.put(ANNOTATION_MANAGED, "false");
+            v1alpha1Function.getMetadata()
+                    .setAnnotations(CommonUtil.mergeMap(v1alpha1Function.getMetadata().getAnnotations(), unManaged));
         }
 
         v1alpha1FunctionSpec.setLogTopic(functionConfig.getLogTopic());
@@ -451,6 +459,11 @@ public class FunctionsUtil {
 
         if (v1alpha1FunctionSpec.getMaxReplicas() != null && v1alpha1FunctionSpec.getMaxReplicas() > 0) {
             customRuntimeOptions.setMaxReplicas(v1alpha1FunctionSpec.getMaxReplicas());
+        }
+
+        if (v1alpha1Function.getMetadata().getAnnotations().containsKey(ANNOTATION_MANAGED)) {
+            customRuntimeOptions.setUnManaged(v1alpha1Function.getMetadata().getAnnotations().get(ANNOTATION_MANAGED)
+                    .equals("false"));
         }
 
         if (v1alpha1FunctionSpec.getPod() != null &&

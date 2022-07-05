@@ -27,6 +27,7 @@ public class CustomRuntimeOptions {
     private String inputTypeClassName;
     private String outputTypeClassName;
     private int maxReplicas;
+    private boolean unManaged;
 
     @TrustedModeOnly
     private String serviceAccountName;

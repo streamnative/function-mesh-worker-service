@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -20,6 +20,7 @@ package io.functionmesh.compute.util;
 
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
+import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
 import static io.functionmesh.compute.util.CommonUtil.getClassNameFromFile;
 import static io.functionmesh.compute.util.CommonUtil.getCustomLabelClaims;
@@ -241,6 +242,13 @@ public class SourcesUtil {
             v1alpha1SourceSpec.setMaxReplicas(customRuntimeOptions.getMaxReplicas());
         }
 
+        if (customRuntimeOptions.isUnManaged()) {
+            Map<String, String> unManaged = new HashMap<>();
+            unManaged.put(ANNOTATION_MANAGED, "false");
+            v1alpha1Source.getMetadata()
+                    .setAnnotations(CommonUtil.mergeMap(v1alpha1Source.getMetadata().getAnnotations(), unManaged));
+        }
+
         Resources resources =
                 CommonUtil.mergeWithDefault(worker.getMeshWorkerServiceCustomConfig().getDefaultResources(),
                         sourceConfig.getResources());
@@ -401,6 +409,11 @@ public class SourcesUtil {
 
         if (v1alpha1SourceSpec.getMaxReplicas() != null && v1alpha1SourceSpec.getMaxReplicas() > 0) {
             customRuntimeOptions.setMaxReplicas(v1alpha1SourceSpec.getMaxReplicas());
+        }
+
+        if (v1alpha1Source.getMetadata().getAnnotations().containsKey(ANNOTATION_MANAGED)) {
+            customRuntimeOptions.setUnManaged(
+                    v1alpha1Source.getMetadata().getAnnotations().get(ANNOTATION_MANAGED).equals("false"));
         }
 
         if (v1alpha1SourceSpec.getPod() != null &&
