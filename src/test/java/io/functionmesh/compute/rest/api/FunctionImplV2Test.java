@@ -68,7 +68,6 @@ import org.apache.pulsar.common.functions.Resources;
 import org.apache.pulsar.common.policies.data.FunctionStatsImpl;
 import org.apache.pulsar.common.policies.data.TenantInfo;
 import org.apache.pulsar.common.util.RestException;
-import org.apache.pulsar.functions.proto.Function;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.junit.Assert;
@@ -153,6 +152,7 @@ public class FunctionImplV2Test {
 
         when(mockedKubernetesApi.get(anyString(), anyString())).thenReturn(mockedKubernetesApiResponse);
         when(mockedKubernetesApi.create(any())).thenReturn(mockedKubernetesApiResponse);
+        when(mockedKubernetesApi.update(any())).thenReturn(mockedKubernetesApiResponse);
         when(mockedKubernetesApiResponse.isSuccess()).thenReturn(true);
     }
 
@@ -230,6 +230,14 @@ public class FunctionImplV2Test {
         Assert.assertEquals(functionStats.instances.size(), 1);
     }
 
+    private void mockStaticMethod() {
+        PowerMockito.stub(PowerMockito.method(PackageManagementServiceUtil.class, "uploadPackageToPackageService"))
+                .toReturn("test.jar");
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
+                .toReturn("test.jar");
+    }
+
     private FunctionConfig mockFunctionConfig() {
         FunctionConfig functionConfig = mock(FunctionConfig.class);
 
@@ -268,19 +276,10 @@ public class FunctionImplV2Test {
         return resources;
     }
 
-    private Function.FunctionDetails mockFunctionDetails() {
-        Function.FunctionDetails functionDetails = mock(Function.FunctionDetails.class);
-        return functionDetails;
-    }
-
     @Test
     public void registerFunctionTest() throws Exception {
         FunctionConfig functionConfig = mockFunctionConfig();
-        PowerMockito.stub(PowerMockito.method(PackageManagementServiceUtil.class, "uploadPackageToPackageService"))
-                .toReturn("test.jar");
-        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
-        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
-                .toReturn("test.jar");
+        mockStaticMethod();
 
         V1alpha1Function functionResource = mock(V1alpha1Function.class);
         when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
@@ -298,6 +297,35 @@ public class FunctionImplV2Test {
                     restException.getMessage()));
         }
 
+    }
+
+    @Test
+    public void updateFunctionTest() {
+        FunctionConfig functionConfig = mockFunctionConfig();
+        mockStaticMethod();
+
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        V1ObjectMeta functionMeta = mock(V1ObjectMeta.class);
+
+        when(functionResource.getMetadata()).thenReturn(functionMeta);
+        when(functionResource.getMetadata().getResourceVersion()).thenReturn("899291");
+        when(functionResource.getMetadata().getLabels()).thenReturn(Collections.singletonMap("foo", "bar"));
+
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+        when(mockedKubernetesApiResponse.isSuccess()).thenReturn(true);
+
+        try {
+            this.resource.updateFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
+                    functionConfig, null, null, null);
+        } catch (
+                RestException restException) {
+            Assert.fail(String.format(
+                    "updateFunction {}/{}/{} sink failed, error message: {}",
+                    tenant,
+                    namespace,
+                    function,
+                    restException.getMessage()));
+        }
     }
 
     private V1alpha1FunctionSpec buildV1alpha1FunctionSpecForGetFunctionInfo() {
