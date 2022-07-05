@@ -54,7 +54,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.Call;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.broker.authentication.AuthenticationDataHttps;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
@@ -231,38 +230,22 @@ public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1F
                     cluster,
                     worker()
             );
-            Call getCall = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Function.getMetadata().getName(),
-                    null
-            );
-            V1alpha1Function oldFn = executeCall(getCall, V1alpha1Function.class);
-            if (oldFn.getMetadata() == null || oldFn.getMetadata().getLabels() == null) {
+
+            String nameSpaceName = worker().getJobNamespace();
+            String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, functionName);
+            V1alpha1Function v1alpha1FunctionPre = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+            if (v1alpha1FunctionPre.getMetadata() == null || v1alpha1FunctionPre.getMetadata().getLabels() == null) {
                 log.error("update {}/{}/{} function failed, the function resource cannot be found", tenant, namespace,
                         functionName);
                 throw new RestException(Response.Status.NOT_FOUND, "This function resource was not found");
             }
 
             v1alpha1Function.getMetadata().setNamespace(worker().getJobNamespace());
-            v1alpha1Function.getMetadata().setResourceVersion(oldFn.getMetadata().getResourceVersion());
+            v1alpha1Function.getMetadata().setResourceVersion(v1alpha1FunctionPre.getMetadata().getResourceVersion());
 
             this.upsertFunction(tenant, namespace, functionName, functionConfig, v1alpha1Function,
                     clientAuthenticationDataHttps);
-            Call replaceCall = worker().getCustomObjectsApi().replaceNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Function.getMetadata().getName(),
-                    v1alpha1Function,
-                    null,
-                    null,
-                    null
-            );
-            executeCall(replaceCall, V1alpha1Function.class);
+            extractResponse(getResourceApi().update(v1alpha1Function));
         } catch (Exception e) {
             log.error("update {}/{}/{} function failed", tenant, namespace, functionName, e);
             throw new RestException(Response.Status.INTERNAL_SERVER_ERROR, e.getMessage());
@@ -402,27 +385,16 @@ public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1F
         try {
             String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
             String nameSpaceName = worker().getJobNamespace();
-            Call call = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP, apiVersion, nameSpaceName,
-                    apiPlural, hashName, null);
-            V1alpha1Function v1alpha1Function = executeCall(call, V1alpha1Function.class);
+            V1alpha1Function v1alpha1Function = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+            try {
+                validateResourceObject(v1alpha1Function);
+            } catch (IllegalArgumentException e) {
+                log.warn("get stats {}/{}/{} function failed", tenant, namespace, componentName);
+                throw new RestException(Response.Status.NOT_FOUND,
+                        String.format("get stats %s/%s/%s function failed,details=%s", tenant, namespace, componentName,
+                                e.getMessage()));
+            }
             V1alpha1FunctionStatus v1alpha1FunctionStatus = v1alpha1Function.getStatus();
-            if (v1alpha1FunctionStatus == null) {
-                log.error(
-                        "get status {}/{}/{} function failed, no FunctionStatus exists",
-                        tenant,
-                        namespace,
-                        componentName);
-                throw new RestException(Response.Status.NOT_FOUND, "no FunctionStatus exists");
-            }
-            if (v1alpha1Function.getMetadata() == null) {
-                log.error(
-                        "get status {}/{}/{} function failed, no Metadata exists",
-                        tenant,
-                        namespace,
-                        componentName);
-                throw new RestException(Response.Status.NOT_FOUND, "no Metadata exists");
-            }
             String functionLabelSelector = v1alpha1FunctionStatus.getSelector();
             V1StatefulSet v1StatefulSet = getFunctionStatefulSet(v1alpha1Function);
             String statefulSetName = "";
