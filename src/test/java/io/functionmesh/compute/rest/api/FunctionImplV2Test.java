@@ -38,6 +38,9 @@ import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecPod;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionSpecPodResources;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionStatus;
 import io.functionmesh.compute.models.CustomRuntimeOptions;
+import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
+import io.functionmesh.compute.util.CommonUtil;
+import io.functionmesh.compute.util.PackageManagementServiceUtil;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
 import io.kubernetes.client.openapi.models.V1Pod;
@@ -58,20 +61,32 @@ import org.apache.distributedlog.api.namespace.Namespace;
 import org.apache.pulsar.client.admin.Namespaces;
 import org.apache.pulsar.client.admin.PulsarAdmin;
 import org.apache.pulsar.client.admin.Tenants;
+import org.apache.pulsar.client.api.SubscriptionInitialPosition;
 import org.apache.pulsar.common.functions.ConsumerConfig;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.Resources;
 import org.apache.pulsar.common.policies.data.FunctionStatsImpl;
 import org.apache.pulsar.common.policies.data.TenantInfo;
+import org.apache.pulsar.common.util.RestException;
 import org.apache.pulsar.functions.proto.Function;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
+@RunWith(PowerMockRunner.class)
+@PrepareForTest({
+        PackageManagementServiceUtil.class,
+        CommonUtil.class})
+@PowerMockIgnore({"javax.management.*"})
 public class FunctionImplV2Test {
 
     private static final String tenant = "test-tenant";
@@ -121,12 +136,13 @@ public class FunctionImplV2Test {
         when(mockedTenants.getTenantInfo(any())).thenReturn(mockedTenantInfo);
         when(mockedNamespaces.getNamespaces(any())).thenReturn(namespaceList);
         WorkerConfig workerConfig = mockWorkerConfig();
-
+        MeshWorkerServiceCustomConfig meshWorkerServiceCustomConfig = mockMeshWorkerServiceCustomConfig();
         this.meshWorkerService = mock(MeshWorkerService.class);
         when(meshWorkerService.getWorkerConfig()).thenReturn(workerConfig);
         when(meshWorkerService.isInitialized()).thenReturn(true);
         when(meshWorkerService.getBrokerAdmin()).thenReturn(mockedPulsarAdmin);
         when(meshWorkerService.getJobNamespace()).thenReturn(kubernetesNamespace);
+        when(meshWorkerService.getMeshWorkerServiceCustomConfig()).thenReturn(meshWorkerServiceCustomConfig);
 
         initFunctionStatefulSet();
 
@@ -136,6 +152,7 @@ public class FunctionImplV2Test {
         doReturn(functionPodList).when(resource).getFunctionPods(any(), any(), any(), any());
 
         when(mockedKubernetesApi.get(anyString(), anyString())).thenReturn(mockedKubernetesApiResponse);
+        when(mockedKubernetesApi.create(any())).thenReturn(mockedKubernetesApiResponse);
         when(mockedKubernetesApiResponse.isSuccess()).thenReturn(true);
     }
 
@@ -177,7 +194,20 @@ public class FunctionImplV2Test {
         when(workerConfig.isAuthorizationEnabled()).thenReturn(false);
         when(workerConfig.isAuthenticationEnabled()).thenReturn(false);
         when(workerConfig.getPulsarFunctionsCluster()).thenReturn(pulsarFunctionCluster);
+
+        Resources minResources = mockResources(1.0, 1024L, 1024L * 10);
+        Resources maxResources = mockResources(16.0, 1024L * 32, 1024L * 100);
+        when(workerConfig.getFunctionInstanceMinResources()).thenReturn(minResources);
+        when(workerConfig.getFunctionInstanceMaxResources()).thenReturn(maxResources);
+        when(workerConfig.getDownloadDirectory()).thenReturn("/tmp");
         return workerConfig;
+    }
+
+    private MeshWorkerServiceCustomConfig mockMeshWorkerServiceCustomConfig() {
+        MeshWorkerServiceCustomConfig meshWorkerServiceCustomConfig = mock(MeshWorkerServiceCustomConfig.class);
+        when(meshWorkerServiceCustomConfig.isUploadEnabled()).thenReturn(true);
+        when(meshWorkerServiceCustomConfig.isFunctionEnabled()).thenReturn(true);
+        return meshWorkerServiceCustomConfig;
     }
 
     @Test
@@ -198,6 +228,76 @@ public class FunctionImplV2Test {
         FunctionStatsImpl functionStats = this.resource.getFunctionStats(tenant, namespace, function, null, null, null);
         Assert.assertNotNull(functionStats);
         Assert.assertEquals(functionStats.instances.size(), 1);
+    }
+
+    private FunctionConfig mockFunctionConfig() {
+        FunctionConfig functionConfig = mock(FunctionConfig.class);
+
+        when(functionConfig.getTenant()).thenReturn(tenant);
+        when(functionConfig.getNamespace()).thenReturn(namespace);
+        when(functionConfig.getName()).thenReturn(function);
+
+        Resources resources = mockResources(2.0, 4096L, 1024L * 10);
+        when(functionConfig.getResources()).thenReturn(resources);
+
+        when(functionConfig.getJar()).thenReturn(String.format("function://public/default/%s@1.0", function));
+        when(functionConfig.getClassName()).thenReturn("org.example.functions.testFunction");
+        when(functionConfig.getInputs()).thenReturn(Collections.singletonList(inputTopic));
+        when(functionConfig.getOutput()).thenReturn(outputTopic);
+        when(functionConfig.getMaxPendingAsyncRequests()).thenReturn(1000);
+        when(functionConfig.getLogTopic()).thenReturn(logTopic);
+        when(functionConfig.getAutoAck()).thenReturn(false);
+
+        when(functionConfig.getRetainKeyOrdering()).thenReturn(true);
+        when(functionConfig.getSubscriptionPosition()).thenReturn(SubscriptionInitialPosition.Latest);
+        when(functionConfig.getTimeoutMs()).thenReturn(1000L);
+        when(functionConfig.getForwardSourceMessageProperty()).thenReturn(true);
+        when(functionConfig.getRuntime()).thenReturn(FunctionConfig.Runtime.JAVA);
+        when(functionConfig.getProcessingGuarantees()).thenReturn(FunctionConfig.ProcessingGuarantees.ATLEAST_ONCE);
+        when(functionConfig.getMaxMessageRetries()).thenReturn(3);
+        when(functionConfig.getParallelism()).thenReturn(2);
+
+        return functionConfig;
+    }
+
+    private Resources mockResources(Double cpu, Long ram, Long disk) {
+        Resources resources = mock(Resources.class);
+        when(resources.getCpu()).thenReturn(cpu);
+        when(resources.getRam()).thenReturn(ram);
+        when(resources.getDisk()).thenReturn(disk);
+        return resources;
+    }
+
+    private Function.FunctionDetails mockFunctionDetails() {
+        Function.FunctionDetails functionDetails = mock(Function.FunctionDetails.class);
+        return functionDetails;
+    }
+
+    @Test
+    public void registerFunctionTest() throws Exception {
+        FunctionConfig functionConfig = mockFunctionConfig();
+        PowerMockito.stub(PowerMockito.method(PackageManagementServiceUtil.class, "uploadPackageToPackageService"))
+                .toReturn("test.jar");
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
+                .toReturn("test.jar");
+
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+        when(mockedKubernetesApiResponse.isSuccess()).thenReturn(true);
+        try {
+            this.resource.registerFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
+                    functionConfig, null, null);
+        } catch (
+                RestException restException) {
+            Assert.fail(String.format(
+                    "register {}/{}/{} sink failed, error message: {}",
+                    tenant,
+                    namespace,
+                    function,
+                    restException.getMessage()));
+        }
+
     }
 
     private V1alpha1FunctionSpec buildV1alpha1FunctionSpecForGetFunctionInfo() {
