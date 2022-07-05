@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -69,6 +69,7 @@ import org.apache.pulsar.functions.proto.InstanceControlGrpc;
 import org.apache.pulsar.functions.runtime.kubernetes.KubernetesRuntimeFactoryConfig;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
@@ -268,6 +269,7 @@ public class FunctionsImplTest {
         assertEquals(expectedFunctionStatus, functionStatus);
     }
 
+    @Ignore
     @Test
     public void registerFunctionTest() throws ApiException, IOException, PulsarAdminException {
         String testBody = "{\n" +
@@ -412,6 +414,7 @@ public class FunctionsImplTest {
         }
     }
 
+    @Ignore
     @Test
     public void updateFunctionTest() throws ApiException, IOException, PulsarAdminException {
         String getBody = "{\n" +
@@ -777,6 +780,7 @@ public class FunctionsImplTest {
         }
     }
 
+    @Ignore
     @Test
     public void getFunctionInfoTest() throws ApiException, IOException {
         String testBody = "{\n" +

@@ -66,6 +66,7 @@ import org.apache.pulsar.common.functions.ConsumerConfig;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.Resources;
 import org.apache.pulsar.common.policies.data.FunctionStatsImpl;
+import org.apache.pulsar.common.policies.data.FunctionStatus;
 import org.apache.pulsar.common.policies.data.TenantInfo;
 import org.apache.pulsar.common.util.RestException;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
@@ -283,7 +284,6 @@ public class FunctionImplV2Test {
 
         V1alpha1Function functionResource = mock(V1alpha1Function.class);
         when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
-        when(mockedKubernetesApiResponse.isSuccess()).thenReturn(true);
         try {
             this.resource.registerFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
                     functionConfig, null, null);
@@ -312,7 +312,6 @@ public class FunctionImplV2Test {
         when(functionResource.getMetadata().getLabels()).thenReturn(Collections.singletonMap("foo", "bar"));
 
         when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
-        when(mockedKubernetesApiResponse.isSuccess()).thenReturn(true);
 
         try {
             this.resource.updateFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
@@ -434,5 +433,25 @@ public class FunctionImplV2Test {
         Assert.assertEquals(expectFunctionConfig(), functionConfig);
     }
 
+    @Test
+    public void getFunctionStatusTest() {
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        V1alpha1FunctionStatus v1alpha1FunctionStatus = mock(V1alpha1FunctionStatus.class);
+        V1ObjectMeta v1ObjectMeta = mock(V1ObjectMeta.class);
+        V1alpha1FunctionSpec v1alpha1FunctionSpec = mock(V1alpha1FunctionSpec.class);
+
+        when(functionResource.getStatus()).thenReturn(v1alpha1FunctionStatus);
+        when(functionResource.getMetadata()).thenReturn(v1ObjectMeta);
+        when(functionResource.getSpec()).thenReturn(v1alpha1FunctionSpec);
+
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+
+        doReturn(Collections.singleton(CompletableFuture.completedFuture(
+                InstanceCommunication.MetricsData.newBuilder().build()))).when(resource)
+                .fetchFunctionStatusFromGRPC(any(), any(), any(), any(), any(), any(), any(), any());
+        FunctionStatus functionStatus = this.resource.getFunctionStatus(tenant, namespace, function, null, null, null);
+        Assert.assertNotNull(functionStatus);
+        Assert.assertEquals(1, functionStatus.instances.size());
+    }
 
 }
