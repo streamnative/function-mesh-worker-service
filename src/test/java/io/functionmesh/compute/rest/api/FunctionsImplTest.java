@@ -89,6 +89,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 @PowerMockIgnore({"javax.management.*"})
 @Slf4j
 public class FunctionsImplTest {
+    @Ignore
     @Test
     public void getFunctionStatusTest() throws ApiException, IOException {
         String testBody = "{\n" +
