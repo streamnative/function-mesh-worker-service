@@ -170,18 +170,8 @@ public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1F
         try {
             this.upsertFunction(tenant, namespace, functionName, functionConfig, v1alpha1Function,
                     clientAuthenticationDataHttps);
-            Call call = worker().getCustomObjectsApi().createNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Function,
-                    null,
-                    null,
-                    null,
-                    null
-            );
-            executeCall(call, V1alpha1Function.class);
+
+            extractResponse(getResourceApi().create(v1alpha1Function));
         } catch (RestException restException) {
             log.error(
                     "register {}/{}/{} sink failed, error message: {}",
