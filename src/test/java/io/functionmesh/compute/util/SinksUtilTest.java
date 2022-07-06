@@ -18,7 +18,6 @@
  */
 package io.functionmesh.compute.util;
 
-import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.models.FunctionMeshConnectorDefinition;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
@@ -100,7 +99,6 @@ public class SinksUtilTest {
                         null, meshWorkerService);
 
         Assert.assertEquals(actualV1alpha1Sink.getKind(), kind);
-        Assert.assertEquals(actualV1alpha1Sink.getMetadata().getAnnotations().get(ANNOTATION_MANAGED), "false");
         V1alpha1SinkSpec v1alpha1SinkSpec = actualV1alpha1Sink.getSpec();
         Assert.assertEquals(v1alpha1SinkSpec.getClassName(), className);
         Assert.assertEquals(v1alpha1SinkSpec.getCleanupSubscription(), true);

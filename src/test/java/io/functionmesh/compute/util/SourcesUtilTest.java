@@ -18,7 +18,6 @@
  */
 package io.functionmesh.compute.util;
 
-import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.models.FunctionMeshConnectorDefinition;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
@@ -99,7 +98,6 @@ public class SourcesUtilTest {
                 null, meshWorkerService);
 
         Assert.assertEquals(v1alpha1Source.getKind(), kind);
-        Assert.assertEquals(v1alpha1Source.getMetadata().getAnnotations().get(ANNOTATION_MANAGED), "false");
         V1alpha1SourceSpec v1alpha1SourceSpec = v1alpha1Source.getSpec();
         Assert.assertEquals(v1alpha1SourceSpec.getClassName(), className);
         Assert.assertEquals(v1alpha1SourceSpec.getReplicas().intValue(), parallelism);

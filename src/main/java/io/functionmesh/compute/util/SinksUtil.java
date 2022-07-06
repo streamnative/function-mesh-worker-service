@@ -20,6 +20,7 @@ package io.functionmesh.compute.util;
 
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
+import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
 import static io.functionmesh.compute.util.CommonUtil.getClassNameFromFile;
 import static io.functionmesh.compute.util.CommonUtil.getCustomLabelClaims;
@@ -110,8 +111,7 @@ public class SinksUtil {
                 functionDetails.getTenant(),
                 clusterName,
                 CommonUtil.getOwnerReferenceFromCustomConfigs(customConfig),
-                customLabelClaims,
-                customRuntimeOptions.isManaged()));
+                customLabelClaims));
 
         V1alpha1SinkSpec v1alpha1SinkSpec = new V1alpha1SinkSpec();
         v1alpha1SinkSpec.setTenant(sinkConfig.getTenant());
@@ -585,6 +585,14 @@ public class SinksUtil {
         }
         if (StringUtils.isNotEmpty(customRuntimeOptions.getServiceAccountName())) {
             v1alpha1Sink.getSpec().getPod().setServiceAccountName(customRuntimeOptions.getServiceAccountName());
+        }
+        if (!customRuntimeOptions.isManaged()) {
+            Map<String, String> currentAnnotations = v1alpha1Sink.getMetadata().getAnnotations();
+            if (currentAnnotations == null) {
+                currentAnnotations = new HashMap<>();
+            }
+            currentAnnotations.put(ANNOTATION_MANAGED, "false");
+            v1alpha1Sink.getMetadata().setAnnotations(currentAnnotations);
         }
     }
 

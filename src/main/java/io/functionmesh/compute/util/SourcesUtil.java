@@ -20,6 +20,7 @@ package io.functionmesh.compute.util;
 
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
+import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
 import static io.functionmesh.compute.util.CommonUtil.getClassNameFromFile;
 import static io.functionmesh.compute.util.CommonUtil.getCustomLabelClaims;
@@ -108,8 +109,7 @@ public class SourcesUtil {
                 functionDetails.getTenant(),
                 clusterName,
                 CommonUtil.getOwnerReferenceFromCustomConfigs(customConfig),
-                customLabelClaims,
-                customRuntimeOptions.isManaged()));
+                customLabelClaims));
 
         V1alpha1SourceSpec v1alpha1SourceSpec = new V1alpha1SourceSpec();
         v1alpha1SourceSpec.setTenant(sourceConfig.getTenant());
@@ -513,6 +513,14 @@ public class SourcesUtil {
         }
         if (StringUtils.isNotEmpty(customRuntimeOptions.getServiceAccountName())) {
             v1alpha1Source.getSpec().getPod().setServiceAccountName(customRuntimeOptions.getServiceAccountName());
+        }
+        if (!customRuntimeOptions.isManaged()) {
+            Map<String, String> currentAnnotations = v1alpha1Source.getMetadata().getAnnotations();
+            if (currentAnnotations == null) {
+                currentAnnotations = new HashMap<>();
+            }
+            currentAnnotations.put(ANNOTATION_MANAGED, "false");
+            v1alpha1Source.getMetadata().setAnnotations(currentAnnotations);
         }
     }
 }

@@ -38,7 +38,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -122,7 +121,7 @@ public class CommonUtil {
 
     public static V1ObjectMeta makeV1ObjectMeta(String name, String k8sNamespace, String pulsarNamespace, String tenant,
                                                 String cluster, V1OwnerReference ownerReference,
-                                                Map<String, String> customLabelClaims, boolean managed) {
+                                                Map<String, String> customLabelClaims) {
         V1ObjectMeta v1ObjectMeta = new V1ObjectMeta();
         v1ObjectMeta.setName(createObjectName(cluster, tenant, pulsarNamespace, name));
         v1ObjectMeta.setNamespace(k8sNamespace);
@@ -130,12 +129,6 @@ public class CommonUtil {
             v1ObjectMeta.setOwnerReferences(Collections.singletonList(ownerReference));
         }
         v1ObjectMeta.setLabels(customLabelClaims);
-
-        if (!managed) {
-            Map<String, String> annos = new HashMap<>();
-            annos.put(ANNOTATION_MANAGED, "false");
-            v1ObjectMeta.setAnnotations(annos);
-        }
 
         return v1ObjectMeta;
     }

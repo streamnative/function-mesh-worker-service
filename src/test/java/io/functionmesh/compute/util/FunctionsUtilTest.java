@@ -18,7 +18,6 @@
  */
 package io.functionmesh.compute.util;
 
-import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -104,7 +103,6 @@ public class FunctionsUtilTest {
                 functionName, functionConfig.getJar(), functionConfig, null, meshWorkerService);
 
         Assert.assertEquals(v1alpha1Function.getKind(), kind);
-        Assert.assertEquals(v1alpha1Function.getMetadata().getAnnotations().get(ANNOTATION_MANAGED), "false");
 
         V1alpha1FunctionSpec v1alpha1FunctionSpec = v1alpha1Function.getSpec();
         Assert.assertEquals(v1alpha1FunctionSpec.getClassName(), className);
