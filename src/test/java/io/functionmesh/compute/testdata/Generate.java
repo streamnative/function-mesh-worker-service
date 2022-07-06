@@ -77,6 +77,7 @@ public class Generate {
         customRuntimeOptions.setClusterName(TEST_CLUSTER_NAME);
         customRuntimeOptions.setInputTypeClassName("java.lang.String");
         customRuntimeOptions.setOutputTypeClassName("java.lang.String");
+        customRuntimeOptions.setUnManaged(true);
         String customRuntimeOptionsJSON = new Gson().toJson(customRuntimeOptions, CustomRuntimeOptions.class);
         functionConfig.setCustomRuntimeOptions(customRuntimeOptionsJSON);
         functionConfig.setJar(String.format("function://public/default/%s@1.0", functionName));
@@ -118,6 +119,7 @@ public class Generate {
         CustomRuntimeOptions customRuntimeOptions = new CustomRuntimeOptions();
         customRuntimeOptions.setClusterName(TEST_CLUSTER_NAME);
         customRuntimeOptions.setInputTypeClassName("[B");
+        customRuntimeOptions.setUnManaged(true);
         String customRuntimeOptionsJSON = new Gson().toJson(customRuntimeOptions, CustomRuntimeOptions.class);
         sinkConfig.setCustomRuntimeOptions(customRuntimeOptionsJSON);
         sinkConfig.setArchive("/pulsar/pulsar-io-elastic-search-2.7.0-rc-pm-3.nar");
@@ -169,6 +171,7 @@ public class Generate {
         CustomRuntimeOptions customRuntimeOptions = new CustomRuntimeOptions();
         customRuntimeOptions.setClusterName(TEST_CLUSTER_NAME);
         customRuntimeOptions.setOutputTypeClassName("org.apache.pulsar.common.schema.KeyValue");
+        customRuntimeOptions.setUnManaged(true);
         String customRuntimeOptionsJSON = new Gson().toJson(customRuntimeOptions, CustomRuntimeOptions.class);
         sourceConfig.setCustomRuntimeOptions(customRuntimeOptionsJSON);
         sourceConfig.setArchive("/pulsar/pulsar-io-debezium-mongodb-2.7.0.nar");
