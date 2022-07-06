@@ -111,7 +111,7 @@ public class SinksUtil {
                 clusterName,
                 CommonUtil.getOwnerReferenceFromCustomConfigs(customConfig),
                 customLabelClaims,
-                customRuntimeOptions.isUnManaged()));
+                customRuntimeOptions.isManaged()));
 
         V1alpha1SinkSpec v1alpha1SinkSpec = new V1alpha1SinkSpec();
         v1alpha1SinkSpec.setTenant(sinkConfig.getTenant());
@@ -417,7 +417,7 @@ public class SinksUtil {
             customRuntimeOptions.setMaxReplicas(v1alpha1SinkSpec.getMaxReplicas());
         }
 
-        CommonUtil.setUnManaged(customRuntimeOptions, v1alpha1Sink.getMetadata());
+        CommonUtil.setManaged(customRuntimeOptions, v1alpha1Sink.getMetadata());
 
         if (v1alpha1SinkSpec.getPod() != null &&
                 Strings.isNotEmpty(v1alpha1SinkSpec.getPod().getServiceAccountName())) {

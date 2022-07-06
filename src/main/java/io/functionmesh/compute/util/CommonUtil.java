@@ -122,7 +122,7 @@ public class CommonUtil {
 
     public static V1ObjectMeta makeV1ObjectMeta(String name, String k8sNamespace, String pulsarNamespace, String tenant,
                                                 String cluster, V1OwnerReference ownerReference,
-                                                Map<String, String> customLabelClaims, boolean unManaged) {
+                                                Map<String, String> customLabelClaims, boolean managed) {
         V1ObjectMeta v1ObjectMeta = new V1ObjectMeta();
         v1ObjectMeta.setName(createObjectName(cluster, tenant, pulsarNamespace, name));
         v1ObjectMeta.setNamespace(k8sNamespace);
@@ -131,7 +131,7 @@ public class CommonUtil {
         }
         v1ObjectMeta.setLabels(customLabelClaims);
 
-        if (unManaged) {
+        if (!managed) {
             Map<String, String> annos = new HashMap<>();
             annos.put(ANNOTATION_MANAGED, "false");
             v1ObjectMeta.setAnnotations(annos);
@@ -140,10 +140,10 @@ public class CommonUtil {
         return v1ObjectMeta;
     }
 
-    public static void setUnManaged(CustomRuntimeOptions customRuntimeOptions, V1ObjectMeta objectMeta) {
+    public static void setManaged(CustomRuntimeOptions customRuntimeOptions, V1ObjectMeta objectMeta) {
         try {
             if (objectMeta.getAnnotations().containsKey(ANNOTATION_MANAGED)) {
-                customRuntimeOptions.setUnManaged(objectMeta.getAnnotations().get(ANNOTATION_MANAGED).equals("false"));
+                customRuntimeOptions.setManaged(objectMeta.getAnnotations().get(ANNOTATION_MANAGED).equals("true"));
             }
         } catch (NullPointerException e) { // ignore null pointer exception
 

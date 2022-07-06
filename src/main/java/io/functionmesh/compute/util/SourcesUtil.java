@@ -109,7 +109,7 @@ public class SourcesUtil {
                 clusterName,
                 CommonUtil.getOwnerReferenceFromCustomConfigs(customConfig),
                 customLabelClaims,
-                customRuntimeOptions.isUnManaged()));
+                customRuntimeOptions.isManaged()));
 
         V1alpha1SourceSpec v1alpha1SourceSpec = new V1alpha1SourceSpec();
         v1alpha1SourceSpec.setTenant(sourceConfig.getTenant());
@@ -404,7 +404,7 @@ public class SourcesUtil {
             customRuntimeOptions.setMaxReplicas(v1alpha1SourceSpec.getMaxReplicas());
         }
 
-        CommonUtil.setUnManaged(customRuntimeOptions, v1alpha1Source.getMetadata());
+        CommonUtil.setManaged(customRuntimeOptions, v1alpha1Source.getMetadata());
 
         if (v1alpha1SourceSpec.getPod() != null &&
                 Strings.isNotEmpty(v1alpha1SourceSpec.getPod().getServiceAccountName())) {

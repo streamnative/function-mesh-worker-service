@@ -106,7 +106,7 @@ public class FunctionsUtil {
                 clusterName,
                 CommonUtil.getOwnerReferenceFromCustomConfigs(customConfig),
                 customLabelClaims,
-                customRuntimeOptions.isUnManaged()));
+                customRuntimeOptions.isManaged()));
 
         V1alpha1FunctionSpec v1alpha1FunctionSpec = new V1alpha1FunctionSpec();
 
@@ -454,7 +454,7 @@ public class FunctionsUtil {
             customRuntimeOptions.setMaxReplicas(v1alpha1FunctionSpec.getMaxReplicas());
         }
 
-        CommonUtil.setUnManaged(customRuntimeOptions, v1alpha1Function.getMetadata());
+        CommonUtil.setManaged(customRuntimeOptions, v1alpha1Function.getMetadata());
 
         if (v1alpha1FunctionSpec.getPod() != null &&
                 Strings.isNotEmpty(v1alpha1FunctionSpec.getPod().getServiceAccountName())) {
