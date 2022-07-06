@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *   http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -20,6 +20,7 @@ package io.functionmesh.compute.rest.api;
 
 import static io.functionmesh.compute.util.KubernetesUtils.validateResourceOwner;
 import static io.functionmesh.compute.util.KubernetesUtils.validateStatefulSet;
+import com.google.common.annotations.VisibleForTesting;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.functions.models.V1alpha1Function;
 import io.functionmesh.compute.functions.models.V1alpha1FunctionList;
@@ -35,13 +36,18 @@ import io.functionmesh.compute.util.FunctionsUtil;
 import io.functionmesh.compute.util.KubernetesUtils;
 import io.functionmesh.compute.util.PackageManagementServiceUtil;
 import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.kubernetes.client.openapi.models.V1ContainerState;
+import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1Pod;
 import io.kubernetes.client.openapi.models.V1PodList;
+import io.kubernetes.client.openapi.models.V1PodStatus;
 import io.kubernetes.client.openapi.models.V1StatefulSet;
 import io.kubernetes.client.util.generic.GenericKubernetesApi;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -604,6 +610,159 @@ public class FunctionsImpl extends MeshComponentImpl<V1alpha1Function, V1alpha1F
             log.error("get function pods failed, {}/{}/{}", tenant, namespace, componentName, e);
         }
         return podList;
+    }
+
+    @VisibleForTesting
+    protected Set<CompletableFuture<InstanceCommunication.FunctionStatus>> fetchFunctionStatusFromGRPC(List<V1Pod> pods,
+                                                                                                       String subdomain,
+                                                                                                       String statefulSetName,
+                                                                                                       String nameSpaceName,
+                                                                                                       FunctionStatus functionStatus,
+                                                                                                       V1alpha1Function v1alpha1Function,
+                                                                                                       ManagedChannel[] channel,
+                                                                                                       InstanceControlGrpc.InstanceControlFutureStub[] stub) {
+        Set<CompletableFuture<InstanceCommunication.FunctionStatus>> completableFutureSet = new HashSet<>();
+        pods.forEach(pod -> {
+            String podName = KubernetesUtils.getPodName(pod);
+            int shardId = CommonUtil.getShardIdFromPodName(podName);
+            int podIndex = pods.indexOf(pod);
+            String address = KubernetesUtils.getServiceUrl(podName, subdomain, nameSpaceName);
+            if (shardId == -1) {
+                log.warn("shardId invalid {}", podName);
+                return;
+            }
+            FunctionStatus.FunctionInstanceStatus functionInstanceStatus = null;
+            for (FunctionStatus.FunctionInstanceStatus ins : functionStatus.getInstances()) {
+                if (ins.getInstanceId() == shardId) {
+                    functionInstanceStatus = ins;
+                    break;
+                }
+            }
+            if (functionInstanceStatus != null) {
+                FunctionStatus.FunctionInstanceStatus.FunctionInstanceStatusData
+                        functionInstanceStatusData = functionInstanceStatus.getStatus();
+                V1PodStatus podStatus = pod.getStatus();
+                if (v1alpha1Function.getSpec() != null && StringUtils.isNotEmpty(
+                        v1alpha1Function.getSpec().getClusterName())) {
+                    functionInstanceStatusData.setWorkerId(v1alpha1Function.getSpec().getClusterName());
+                }
+                if (podStatus != null) {
+                    functionInstanceStatusData.setRunning(KubernetesUtils.isPodRunning(pod));
+                    if (podStatus.getContainerStatuses() != null && !podStatus.getContainerStatuses()
+                            .isEmpty()) {
+                        V1ContainerStatus containerStatus = podStatus.getContainerStatuses().get(0);
+                        functionInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
+                    }
+                }
+                // get status from grpc
+                if (channel[podIndex] == null && stub[podIndex] == null) {
+                    channel[podIndex] = ManagedChannelBuilder.forAddress(address, 9093)
+                            .usePlaintext()
+                            .build();
+                    stub[podIndex] = InstanceControlGrpc.newFutureStub(channel[podIndex]);
+                }
+                CompletableFuture<InstanceCommunication.FunctionStatus> future =
+                        CommonUtil.getFunctionStatusAsync(stub[podIndex]);
+                future.whenComplete((fs, e) -> {
+                    if (channel[podIndex] != null) {
+                        log.debug("closing channel {}", podIndex);
+                        channel[podIndex].shutdown();
+                    }
+                    if (e != null) {
+                        log.error("Get function {}-{} status from grpc failed from namespace {}",
+                                statefulSetName,
+                                shardId,
+                                nameSpaceName,
+                                e);
+                        functionInstanceStatusData.setError(e.getMessage());
+                    } else if (fs != null) {
+                        FunctionsUtil.convertFunctionStatusToInstanceStatusData(fs,
+                                functionInstanceStatusData);
+                    }
+                });
+                completableFutureSet.add(future);
+            } else {
+                log.error(
+                        "Get function {}-{} status failed from namespace {}, cannot find status for "
+                                + "shardId {}",
+                        statefulSetName,
+                        shardId,
+                        nameSpaceName,
+                        shardId);
+            }
+        });
+        return completableFutureSet;
+    }
+
+    @VisibleForTesting
+    protected void fillFunctionStatusByPendingPod(List<V1Pod> pods,
+                                                  String statefulSetName,
+                                                  String nameSpaceName,
+                                                  FunctionStatus functionStatus,
+                                                  V1alpha1Function v1alpha1Function) {
+        pods.forEach(pod -> {
+            String podName = KubernetesUtils.getPodName(pod);
+            int shardId = CommonUtil.getShardIdFromPodName(podName);
+            if (shardId == -1) {
+                log.warn("shardId invalid {}", podName);
+                return;
+            }
+            FunctionStatus.FunctionInstanceStatus functionInstanceStatus = null;
+            for (FunctionStatus.FunctionInstanceStatus ins : functionStatus.getInstances()) {
+                if (ins.getInstanceId() == shardId) {
+                    functionInstanceStatus = ins;
+                    break;
+                }
+            }
+            if (functionInstanceStatus != null) {
+                FunctionStatus.FunctionInstanceStatus.FunctionInstanceStatusData
+                        functionInstanceStatusData = functionInstanceStatus.getStatus();
+                V1PodStatus podStatus = pod.getStatus();
+                if (podStatus != null) {
+                    List<V1ContainerStatus> containerStatuses = podStatus.getContainerStatuses();
+                    if (containerStatuses != null && !containerStatuses.isEmpty()) {
+                        V1ContainerStatus containerStatus = null;
+                        for (V1ContainerStatus s : containerStatuses) {
+                            if (s.getImage().contains(v1alpha1Function.getSpec().getImage())) {
+                                containerStatus = s;
+                                break;
+                            }
+                        }
+                        if (containerStatus != null) {
+                            V1ContainerState state = containerStatus.getState();
+                            if (state != null && state.getTerminated() != null) {
+                                functionInstanceStatusData.setError(state.getTerminated().getMessage());
+                            } else if (state != null && state.getWaiting() != null) {
+                                functionInstanceStatusData.setError(state.getWaiting().getMessage());
+                            } else {
+                                V1ContainerState lastState = containerStatus.getLastState();
+                                if (lastState != null && lastState.getTerminated() != null) {
+                                    functionInstanceStatusData.setError(
+                                            lastState.getTerminated().getMessage());
+                                } else if (lastState != null && lastState.getWaiting() != null) {
+                                    functionInstanceStatusData.setError(
+                                            lastState.getWaiting().getMessage());
+                                }
+                            }
+                            if (containerStatus.getRestartCount() != null) {
+                                functionInstanceStatusData.setNumRestarts(
+                                        containerStatus.getRestartCount());
+                            }
+                        } else {
+                            functionInstanceStatusData.setError(podStatus.getPhase());
+                        }
+                    }
+                }
+            } else {
+                log.error(
+                        "Get function {}-{} status failed from namespace {}, cannot find status for "
+                                + "shardId {}",
+                        statefulSetName,
+                        shardId,
+                        nameSpaceName,
+                        shardId);
+            }
+        });
     }
 
 }

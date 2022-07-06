@@ -290,7 +290,7 @@ public class FunctionImplV2Test {
         } catch (
                 RestException restException) {
             Assert.fail(String.format(
-                    "register {}/{}/{} sink failed, error message: {}",
+                    "register {}/{}/{} function failed, error message: {}",
                     tenant,
                     namespace,
                     function,
