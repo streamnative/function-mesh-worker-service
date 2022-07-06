@@ -426,10 +426,14 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
                             }
                             if (podStatus != null) {
                                 sourceInstanceStatusData.setRunning(KubernetesUtils.isPodRunning(pod));
-                                if (podStatus.getContainerStatuses() != null && !podStatus.getContainerStatuses()
-                                        .isEmpty()) {
-                                    V1ContainerStatus containerStatus = podStatus.getContainerStatuses().get(0);
+                                V1ContainerStatus containerStatus =
+                                        KubernetesUtils.extractDefaultContainerStatus(pod);
+                                if (containerStatus != null) {
                                     sourceInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
+                                } else {
+                                    log.warn("containerStatus is null, cannot get restart count for pod {}",
+                                            podName);
+                                    log.debug("existing containerStatus: {}", podStatus.getContainerStatuses());
                                 }
                             }
                             // get status from grpc

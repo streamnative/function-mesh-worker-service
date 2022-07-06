@@ -61,6 +61,7 @@ public class KubernetesUtils {
     private static final String USE_TLS_CLAIM = "useTls";
     private static final String TLS_ALLOW_INSECURE_CONNECTION_CLAIM = "tlsAllowInsecureConnection";
     private static final String TLS_HOSTNAME_VERIFICATION_ENABLE_CLAIM = "tlsHostnameVerificationEnable";
+    private static final String DEFAULT_CONTAINER_NAME_ANNOTATION = "kubectl.kubernetes.io/default-container";
 
     public static String getNamespace() {
         String namespace = null;
@@ -281,6 +282,27 @@ public class KubernetesUtils {
         if (v1StatefulSet.getStatus() == null) {
             throw new IllegalArgumentException("StatefulSet status is null");
         }
+    }
+
+    public static V1ContainerStatus extractDefaultContainerStatus(V1Pod pod) {
+        if (pod == null || pod.getStatus() == null || pod.getStatus().getContainerStatuses() == null) {
+            return null;
+        }
+        String defaultContainerName = getDefaultContainerName(pod);
+        for (V1ContainerStatus containerStatus : pod.getStatus().getContainerStatuses()) {
+            if (containerStatus.getName().equals(defaultContainerName)) {
+                return containerStatus;
+            }
+        }
+        return null;
+    }
+
+    public static String getDefaultContainerName(V1Pod pod) {
+        if (pod == null || pod.getMetadata() == null || pod.getMetadata().getAnnotations() == null ||
+                pod.getMetadata().getAnnotations().isEmpty()) {
+            return null;
+        }
+        return pod.getMetadata().getAnnotations().getOrDefault(DEFAULT_CONTAINER_NAME_ANNOTATION, null);
     }
 
 }

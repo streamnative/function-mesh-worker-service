@@ -230,11 +230,8 @@ public class CommonUtil {
         Futures.addCallback(response, new FutureCallback<InstanceCommunication.FunctionStatus>() {
             @Override
             public void onFailure(Throwable throwable) {
-                InstanceCommunication.FunctionStatus.Builder builder =
-                        InstanceCommunication.FunctionStatus.newBuilder();
-                builder.setRunning(false);
-                builder.setFailureException(throwable.getMessage());
-                retval.complete(builder.build());
+                log.warn("getFunctionStatusAsync failed with exception {}", throwable.getMessage());
+                retval.completeExceptionally(throwable);
             }
 
             @Override
@@ -257,8 +254,8 @@ public class CommonUtil {
         Futures.addCallback(response, new FutureCallback<InstanceCommunication.MetricsData>() {
             @Override
             public void onFailure(Throwable throwable) {
-                InstanceCommunication.MetricsData.Builder builder = InstanceCommunication.MetricsData.newBuilder();
-                retval.complete(builder.build());
+                log.warn("getFunctionMetricsAsync failed with exception {}", throwable.getMessage());
+                retval.completeExceptionally(throwable);
             }
 
             @Override
