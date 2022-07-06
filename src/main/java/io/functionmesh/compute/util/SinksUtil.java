@@ -20,7 +20,6 @@ package io.functionmesh.compute.util;
 
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
-import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
 import static io.functionmesh.compute.util.CommonUtil.getClassNameFromFile;
 import static io.functionmesh.compute.util.CommonUtil.getCustomLabelClaims;
@@ -111,7 +110,8 @@ public class SinksUtil {
                 functionDetails.getTenant(),
                 clusterName,
                 CommonUtil.getOwnerReferenceFromCustomConfigs(customConfig),
-                customLabelClaims));
+                customLabelClaims,
+                customRuntimeOptions.isUnManaged()));
 
         V1alpha1SinkSpec v1alpha1SinkSpec = new V1alpha1SinkSpec();
         v1alpha1SinkSpec.setTenant(sinkConfig.getTenant());
@@ -282,13 +282,6 @@ public class SinksUtil {
             v1alpha1SinkSpec.setMaxReplicas(customRuntimeOptions.getMaxReplicas());
         }
 
-        if (customRuntimeOptions.isUnManaged()) {
-            Map<String, String> unManaged = new HashMap<>();
-            unManaged.put(ANNOTATION_MANAGED, "false");
-            v1alpha1Sink.getMetadata()
-                    .setAnnotations(CommonUtil.mergeMap(v1alpha1Sink.getMetadata().getAnnotations(), unManaged));
-        }
-
         Resources resources =
                 CommonUtil.mergeWithDefault(worker.getMeshWorkerServiceCustomConfig().getDefaultResources(),
                         sinkConfig.getResources());
@@ -423,10 +416,9 @@ public class SinksUtil {
         if (v1alpha1SinkSpec.getMaxReplicas() != null && v1alpha1SinkSpec.getMaxReplicas() > 0) {
             customRuntimeOptions.setMaxReplicas(v1alpha1SinkSpec.getMaxReplicas());
         }
-        if (v1alpha1Sink.getMetadata().getAnnotations().containsKey(ANNOTATION_MANAGED)) {
-            customRuntimeOptions.setUnManaged(
-                    v1alpha1Sink.getMetadata().getAnnotations().get(ANNOTATION_MANAGED).equals("false"));
-        }
+
+        CommonUtil.setUnManaged(customRuntimeOptions, v1alpha1Sink.getMetadata());
+
         if (v1alpha1SinkSpec.getPod() != null &&
                 Strings.isNotEmpty(v1alpha1SinkSpec.getPod().getServiceAccountName())) {
             customRuntimeOptions.setServiceAccountName(v1alpha1SinkSpec.getPod().getServiceAccountName());

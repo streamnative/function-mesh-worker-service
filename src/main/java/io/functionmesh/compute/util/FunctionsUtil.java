@@ -20,7 +20,6 @@ package io.functionmesh.compute.util;
 
 import static io.functionmesh.compute.models.SecretRef.KEY_KEY;
 import static io.functionmesh.compute.models.SecretRef.PATH_KEY;
-import static io.functionmesh.compute.util.CommonUtil.ANNOTATION_MANAGED;
 import static io.functionmesh.compute.util.CommonUtil.DEFAULT_FUNCTION_EXECUTABLE;
 import static io.functionmesh.compute.util.CommonUtil.buildDownloadPath;
 import static io.functionmesh.compute.util.CommonUtil.downloadPackageFile;
@@ -106,7 +105,8 @@ public class FunctionsUtil {
                 functionDetails.getTenant(),
                 clusterName,
                 CommonUtil.getOwnerReferenceFromCustomConfigs(customConfig),
-                customLabelClaims));
+                customLabelClaims,
+                customRuntimeOptions.isUnManaged()));
 
         V1alpha1FunctionSpec v1alpha1FunctionSpec = new V1alpha1FunctionSpec();
 
@@ -235,13 +235,6 @@ public class FunctionsUtil {
         v1alpha1FunctionSpec.setReplicas(functionDetails.getParallelism());
         if (customRuntimeOptions.getMaxReplicas() > functionDetails.getParallelism()) {
             v1alpha1FunctionSpec.setMaxReplicas(customRuntimeOptions.getMaxReplicas());
-        }
-
-        if (customRuntimeOptions.isUnManaged()) {
-            Map<String, String> unManaged = new HashMap<>();
-            unManaged.put(ANNOTATION_MANAGED, "false");
-            v1alpha1Function.getMetadata()
-                    .setAnnotations(CommonUtil.mergeMap(v1alpha1Function.getMetadata().getAnnotations(), unManaged));
         }
 
         v1alpha1FunctionSpec.setLogTopic(functionConfig.getLogTopic());
@@ -461,10 +454,7 @@ public class FunctionsUtil {
             customRuntimeOptions.setMaxReplicas(v1alpha1FunctionSpec.getMaxReplicas());
         }
 
-        if (v1alpha1Function.getMetadata().getAnnotations().containsKey(ANNOTATION_MANAGED)) {
-            customRuntimeOptions.setUnManaged(v1alpha1Function.getMetadata().getAnnotations().get(ANNOTATION_MANAGED)
-                    .equals("false"));
-        }
+        CommonUtil.setUnManaged(customRuntimeOptions, v1alpha1Function.getMetadata());
 
         if (v1alpha1FunctionSpec.getPod() != null &&
                 Strings.isNotEmpty(v1alpha1FunctionSpec.getPod().getServiceAccountName())) {
