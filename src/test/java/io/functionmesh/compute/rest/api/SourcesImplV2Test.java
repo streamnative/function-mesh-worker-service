@@ -31,15 +31,14 @@ import com.google.gson.Gson;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.models.CustomRuntimeOptions;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
-import io.functionmesh.compute.sinks.models.V1alpha1Sink;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkList;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkSpec;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkSpecInput;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkSpecJava;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkSpecPod;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkSpecPodResources;
-import io.functionmesh.compute.sinks.models.V1alpha1SinkStatus;
-import io.functionmesh.compute.util.SinksUtil;
+import io.functionmesh.compute.sources.models.V1alpha1Source;
+import io.functionmesh.compute.sources.models.V1alpha1SourceList;
+import io.functionmesh.compute.sources.models.V1alpha1SourceSpec;
+import io.functionmesh.compute.sources.models.V1alpha1SourceSpecJava;
+import io.functionmesh.compute.sources.models.V1alpha1SourceSpecPod;
+import io.functionmesh.compute.sources.models.V1alpha1SourceSpecPodResources;
+import io.functionmesh.compute.sources.models.V1alpha1SourceStatus;
+import io.functionmesh.compute.util.SourcesUtil;
 import io.kubernetes.client.openapi.apis.AppsV1Api;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
@@ -65,8 +64,8 @@ import org.apache.pulsar.client.admin.Tenants;
 import org.apache.pulsar.common.functions.ConsumerConfig;
 import org.apache.pulsar.common.functions.FunctionConfig;
 import org.apache.pulsar.common.functions.Resources;
-import org.apache.pulsar.common.io.SinkConfig;
-import org.apache.pulsar.common.policies.data.SinkStatus;
+import org.apache.pulsar.common.io.SourceConfig;
+import org.apache.pulsar.common.policies.data.SourceStatus;
 import org.apache.pulsar.common.policies.data.TenantInfo;
 import org.apache.pulsar.common.util.RestException;
 import org.apache.pulsar.functions.proto.InstanceCommunication;
@@ -83,10 +82,10 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore({"javax.management.*"})
-public class SinksImplV2Test {
+public class SourcesImplV2Test {
     private static final String tenant = "test-tenant";
     private static final String namespace = "test-namespace";
-    private static final String sinkName = "test-sink";
+    private static final String sourceName = "test-source";
     private static final String inputTopic = "test-input-topic";
     private static final String outputTopic = "test-output-topic";
     private static final String logTopic = "test-log-topic";
@@ -96,7 +95,7 @@ public class SinksImplV2Test {
 
     private static final String apiGroup = "compute.functionmesh.io";
     private static final String apiVersion = "v1alpha1";
-    private static final String apiSinkKind = "Sink";
+    private static final String apiSourceKind = "Source";
     private static final String runnerImage = "custom-image";
     private static final String serviceAccountName = "custom-account-name";
     private static final String resourceVersionPre = "899291";
@@ -110,19 +109,19 @@ public class SinksImplV2Test {
     private TenantInfo mockedTenantInfo;
     private Namespace mockedNamespace;
     private final List<String> namespaceList = new LinkedList<>();
-    private SinksImpl resource;
+    private SourcesImpl resource;
 
     @Mock
-    private GenericKubernetesApi<V1alpha1Sink, V1alpha1SinkList> mockedKubernetesApi;
+    private GenericKubernetesApi<V1alpha1Source, V1alpha1SourceList> mockedKubernetesApi;
 
     @Mock
-    private KubernetesApiResponse<V1alpha1Sink> mockedKubernetesApiResponse;
+    private KubernetesApiResponse<V1alpha1Source> mockedKubernetesApiResponse;
 
-    private V1StatefulSet sinkStatefulSet;
-    private V1StatefulSetSpec sinkStatefulSetSpec;
-    private V1StatefulSetStatus sinkStatefulSetStatus;
-    private V1ObjectMeta sinkStatefulSetMetadata;
-    private V1PodList sinkPodList;
+    private V1StatefulSet sourceStatefulSet;
+    private V1StatefulSetSpec sourceStatefulSetSpec;
+    private V1StatefulSetStatus sourceStatefulSetStatus;
+    private V1ObjectMeta sourceStatefulSetMetadata;
+    private V1PodList sourcePodList;
 
     @Before
     public void setup() throws Exception {
@@ -154,10 +153,10 @@ public class SinksImplV2Test {
 
         initFunctionStatefulSet();
 
-        this.resource = spy(new SinksImpl(() -> this.meshWorkerService));
+        this.resource = spy(new SourcesImpl(() -> this.meshWorkerService));
         doReturn(mockedKubernetesApi).when(resource).getResourceApi();
-        doReturn(sinkStatefulSet).when(appsV1Api).readNamespacedStatefulSet(any(), any(), any(), any(), any());
-        doReturn(sinkPodList).when(coreV1Api)
+        doReturn(sourceStatefulSet).when(appsV1Api).readNamespacedStatefulSet(any(), any(), any(), any(), any());
+        doReturn(sourcePodList).when(coreV1Api)
                 .listNamespacedPod(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         when(mockedKubernetesApi.get(anyString(), anyString())).thenReturn(mockedKubernetesApiResponse);
@@ -167,25 +166,25 @@ public class SinksImplV2Test {
     }
 
     private void initFunctionStatefulSet() {
-        this.sinkStatefulSet = mock(V1StatefulSet.class);
-        this.sinkStatefulSetMetadata = mock(V1ObjectMeta.class);
-        this.sinkStatefulSetSpec = mock(V1StatefulSetSpec.class);
-        this.sinkStatefulSetStatus = mock(V1StatefulSetStatus.class);
-        this.sinkPodList = mock(V1PodList.class);
+        this.sourceStatefulSet = mock(V1StatefulSet.class);
+        this.sourceStatefulSetMetadata = mock(V1ObjectMeta.class);
+        this.sourceStatefulSetSpec = mock(V1StatefulSetSpec.class);
+        this.sourceStatefulSetStatus = mock(V1StatefulSetStatus.class);
+        this.sourcePodList = mock(V1PodList.class);
 
-        when(sinkStatefulSet.getMetadata()).thenReturn(sinkStatefulSetMetadata);
-        when(sinkStatefulSet.getSpec()).thenReturn(sinkStatefulSetSpec);
-        when(sinkStatefulSet.getStatus()).thenReturn(sinkStatefulSetStatus);
+        when(sourceStatefulSet.getMetadata()).thenReturn(sourceStatefulSetMetadata);
+        when(sourceStatefulSet.getSpec()).thenReturn(sourceStatefulSetSpec);
+        when(sourceStatefulSet.getStatus()).thenReturn(sourceStatefulSetStatus);
 
-        when(sinkStatefulSetMetadata.getName()).thenReturn(sinkName);
+        when(sourceStatefulSetMetadata.getName()).thenReturn(sourceName);
 
-        when(sinkStatefulSetSpec.getServiceName()).thenReturn(sinkName);
+        when(sourceStatefulSetSpec.getServiceName()).thenReturn(sourceName);
 
-        when(sinkStatefulSetStatus.getReplicas()).thenReturn(1);
+        when(sourceStatefulSetStatus.getReplicas()).thenReturn(1);
 
         V1Pod pod = createPod();
         List<V1Pod> pods = Collections.singletonList(pod);
-        when(sinkPodList.getItems()).thenReturn(pods);
+        when(sourcePodList.getItems()).thenReturn(pods);
     }
 
     private V1Pod createPod() {
@@ -216,168 +215,159 @@ public class SinksImplV2Test {
     private MeshWorkerServiceCustomConfig mockMeshWorkerServiceCustomConfig() {
         MeshWorkerServiceCustomConfig meshWorkerServiceCustomConfig = mock(MeshWorkerServiceCustomConfig.class);
         when(meshWorkerServiceCustomConfig.isUploadEnabled()).thenReturn(true);
-        when(meshWorkerServiceCustomConfig.isSinkEnabled()).thenReturn(true);
+        when(meshWorkerServiceCustomConfig.isSourceEnabled()).thenReturn(true);
         when(meshWorkerServiceCustomConfig.isEnableTrustedMode()).thenReturn(true);
         return meshWorkerServiceCustomConfig;
     }
 
     @Test
-    public void registerSinkTest() {
-        SinkConfig sinkConfig = buildSinkConfig();
-        V1alpha1Sink mockV1alpha1Sink = mock(V1alpha1Sink.class);
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Sink);
+    public void registerSourceTest() {
+        SourceConfig sourceConfig = buildSourceConfig();
+        V1alpha1Source mockV1alpha1Source = mock(V1alpha1Source.class);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Source);
         try {
-            this.resource.registerSink(tenant, namespace, sinkName, null, null, null, sinkConfig, null, null);
+            this.resource.registerSource(tenant, namespace, sourceName, null, null, null, sourceConfig, null, null);
         } catch (RestException restException) {
-            Assert.fail(String.format("register {}/{}/{} sink failed, error message: {}", tenant, namespace, sinkName,
-                    restException.getMessage()));
+            Assert.fail(
+                    String.format("register {}/{}/{} source failed, error message: {}", tenant, namespace, sourceName,
+                            restException.getMessage()));
         }
 
-        V1alpha1Sink v1alpha1SinkOrigin =
-                SinksUtil.createV1alpha1SkinFromSinkConfig(apiSinkKind, apiGroup, apiVersion, sinkName, null, null,
-                        sinkConfig, null, meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(),
+        V1alpha1Source v1alpha1SourceOrigin =
+                SourcesUtil.createV1alpha1SourceFromSourceConfig(apiSourceKind, apiGroup, apiVersion, sourceName, null,
+                        null,
+                        sourceConfig, null, meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(),
                         meshWorkerService);
-        ArgumentCaptor<V1alpha1Sink> v1alpha1SinkArgumentCaptor = ArgumentCaptor.forClass(V1alpha1Sink.class);
-        verify(mockedKubernetesApi).create(v1alpha1SinkArgumentCaptor.capture());
-        V1alpha1Sink v1alpha1SinkFinal = v1alpha1SinkArgumentCaptor.getValue();
-        verifyParameterForCreate(v1alpha1SinkOrigin, v1alpha1SinkFinal);
+        ArgumentCaptor<V1alpha1Source> v1alpha1SourceArgumentCaptor = ArgumentCaptor.forClass(V1alpha1Source.class);
+        verify(mockedKubernetesApi).create(v1alpha1SourceArgumentCaptor.capture());
+        V1alpha1Source v1alpha1SourceFinal = v1alpha1SourceArgumentCaptor.getValue();
+        verifyParameterForCreate(v1alpha1SourceOrigin, v1alpha1SourceFinal);
     }
 
     @Test
-    public void updateSinkTest() {
-        SinkConfig sinkConfig = buildSinkConfig();
-        V1alpha1Sink mockV1alpha1Sink = mock(V1alpha1Sink.class);
+    public void updateSourceTest() {
+        SourceConfig sourceConfig = buildSourceConfig();
+        V1alpha1Source mockV1alpha1Source = mock(V1alpha1Source.class);
         V1ObjectMeta mockV1ObjectMeta = mock(V1ObjectMeta.class);
 
-        when(mockV1alpha1Sink.getMetadata()).thenReturn(mockV1ObjectMeta);
-        when(mockV1alpha1Sink.getMetadata().getResourceVersion()).thenReturn(resourceVersionPre);
-        when(mockV1alpha1Sink.getMetadata().getLabels()).thenReturn(Collections.singletonMap("foo", "bar"));
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Sink);
+        when(mockV1alpha1Source.getMetadata()).thenReturn(mockV1ObjectMeta);
+        when(mockV1alpha1Source.getMetadata().getResourceVersion()).thenReturn(resourceVersionPre);
+        when(mockV1alpha1Source.getMetadata().getLabels()).thenReturn(Collections.singletonMap("foo", "bar"));
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Source);
         try {
-            this.resource.updateSink(tenant, namespace, sinkName, null, null, null, sinkConfig, null, null, null);
+            this.resource.updateSource(tenant, namespace, sourceName, null, null, null, sourceConfig, null, null, null);
         } catch (RestException restException) {
-            Assert.fail(String.format("update {}/{}/{} sink failed, error message: {}", tenant, namespace, sinkName,
+            Assert.fail(String.format("update {}/{}/{} source failed, error message: {}", tenant, namespace, sourceName,
                     restException.getMessage()));
         }
 
-        V1alpha1Sink v1alpha1SinkOrigin =
-                SinksUtil.createV1alpha1SkinFromSinkConfig(apiSinkKind, apiGroup, apiVersion, sinkName, null, null,
-                        sinkConfig, null, meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(),
+        V1alpha1Source v1alpha1SourceOrigin =
+                SourcesUtil.createV1alpha1SourceFromSourceConfig(apiSourceKind, apiGroup, apiVersion, sourceName, null,
+                        null,
+                        sourceConfig, null, meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(),
                         meshWorkerService);
-        ArgumentCaptor<V1alpha1Sink> v1alpha1SinkArgumentCaptor = ArgumentCaptor.forClass(V1alpha1Sink.class);
-        verify(mockedKubernetesApi).update(v1alpha1SinkArgumentCaptor.capture());
-        V1alpha1Sink v1alpha1SinkFinal = v1alpha1SinkArgumentCaptor.getValue();
-        verifyParameterForUpdate(v1alpha1SinkOrigin, v1alpha1SinkFinal);
+        ArgumentCaptor<V1alpha1Source> v1alpha1SourceArgumentCaptor = ArgumentCaptor.forClass(V1alpha1Source.class);
+        verify(mockedKubernetesApi).update(v1alpha1SourceArgumentCaptor.capture());
+        V1alpha1Source v1alpha1SourceFinal = v1alpha1SourceArgumentCaptor.getValue();
+        verifyParameterForUpdate(v1alpha1SourceOrigin, v1alpha1SourceFinal);
     }
 
     @Test
-    public void getSinkStatusTest() {
-        V1alpha1Sink mockV1alpha1Sink = mock(V1alpha1Sink.class);
-        V1alpha1SinkStatus mockV1alpha1SinkStatus = mock(V1alpha1SinkStatus.class);
+    public void getSourceStatusTest() {
+        V1alpha1Source mockV1alpha1Source = mock(V1alpha1Source.class);
+        V1alpha1SourceStatus mockV1alpha1SourceStatus = mock(V1alpha1SourceStatus.class);
         V1ObjectMeta mockV1ObjectMeta = mock(V1ObjectMeta.class);
-        V1alpha1SinkSpec mockV1alpha1SinkSpec = mock(V1alpha1SinkSpec.class);
+        V1alpha1SourceSpec mockV1alpha1SourceSpec = mock(V1alpha1SourceSpec.class);
 
-        when(mockV1alpha1Sink.getMetadata()).thenReturn(mockV1ObjectMeta);
-        when(mockV1alpha1Sink.getStatus()).thenReturn(mockV1alpha1SinkStatus);
-        when(mockV1alpha1Sink.getSpec()).thenReturn(mockV1alpha1SinkSpec);
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Sink);
+        when(mockV1alpha1Source.getMetadata()).thenReturn(mockV1ObjectMeta);
+        when(mockV1alpha1Source.getStatus()).thenReturn(mockV1alpha1SourceStatus);
+        when(mockV1alpha1Source.getSpec()).thenReturn(mockV1alpha1SourceSpec);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Source);
 
         doReturn(Collections.singleton(CompletableFuture.completedFuture(
                 InstanceCommunication.MetricsData.newBuilder().build()))).when(resource)
-                .fetchSinkStatusFromGRPC(any(), any(), any(), any(), any(), any(), any(), any());
-        SinkStatus sinkStatus = this.resource.getSinkStatus(tenant, namespace, sinkName, null, null, null);
-        Assert.assertNotNull(sinkStatus);
-        Assert.assertEquals(1, sinkStatus.instances.size());
+                .fetchSourceStatusFromGRPC(any(), any(), any(), any(), any(), any(), any(), any());
+        SourceStatus sourceStatus = this.resource.getSourceStatus(tenant, namespace, sourceName, null, null, null);
+        Assert.assertNotNull(sourceStatus);
+        Assert.assertEquals(1, sourceStatus.instances.size());
     }
 
     @Test
-    public void getSinkInfoTest() {
-        V1alpha1Sink mockV1alpha1Sink = mock(V1alpha1Sink.class);
-        V1alpha1SinkSpec mockV1alpha1SinkSpec = buildV1alpha1SinkSpecForGetSinkInfo();
+    public void getSourceInfoTest() {
+        V1alpha1Source mockV1alpha1Source = mock(V1alpha1Source.class);
+        V1alpha1SourceSpec mockV1alpha1SourceSpec = buildV1alpha1SourceSpecForGetSourceInfo();
 
-        when(mockV1alpha1Sink.getSpec()).thenReturn(mockV1alpha1SinkSpec);
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Sink);
+        when(mockV1alpha1Source.getSpec()).thenReturn(mockV1alpha1SourceSpec);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(mockV1alpha1Source);
 
-        SinkConfig sinkConfig = this.resource.getSinkInfo(tenant, namespace, sinkName);
-        Assert.assertNotNull(sinkConfig);
-        Assert.assertEquals(expectSinkConfigForSinkInfo(), sinkConfig);
+        SourceConfig sourceConfig = this.resource.getSourceInfo(tenant, namespace, sourceName);
+        Assert.assertNotNull(sourceConfig);
+        Assert.assertEquals(expectSourceConfigForSourceInfo(), sourceConfig);
     }
 
-    private SinkConfig buildSinkConfig() {
-        SinkConfig sinkConfig = new SinkConfig();
-        sinkConfig.setTenant(tenant);
-        sinkConfig.setNamespace(namespace);
-        sinkConfig.setName(sinkName);
-        sinkConfig.setInputs(Collections.singletonList(inputTopic));
-        sinkConfig.setClassName("org.example.functions.testSink");
-        sinkConfig.setParallelism(1);
-        sinkConfig.setConfigs(new HashMap<>());
-        sinkConfig.setArchive("connectors/pulsar-io-elastic-search-2.7.0-rc-pm-3.nar");
-        sinkConfig.setAutoAck(true);
-        sinkConfig.setResources(new Resources(2.0, 4096L, 1024L * 10));
+    private SourceConfig buildSourceConfig() {
+        SourceConfig sourceConfig = new SourceConfig();
+        sourceConfig.setTenant(tenant);
+        sourceConfig.setNamespace(namespace);
+        sourceConfig.setName(sourceName);
+        sourceConfig.setTopicName(inputTopic);
+        sourceConfig.setClassName("org.example.functions.testSource");
+        sourceConfig.setParallelism(1);
+        sourceConfig.setConfigs(new HashMap<>());
+        sourceConfig.setArchive("connectors/pulsar-io-elastic-search-2.7.0-rc-pm-3.nar");
+        sourceConfig.setResources(new Resources(2.0, 4096L, 1024L * 10));
 
         CustomRuntimeOptions customRuntimeOptions = new CustomRuntimeOptions();
         customRuntimeOptions.setClusterName(pulsarFunctionCluster);
         customRuntimeOptions.setRunnerImage(runnerImage);
         customRuntimeOptions.setServiceAccountName(serviceAccountName);
-        sinkConfig.setCustomRuntimeOptions(new Gson().toJson(customRuntimeOptions));
-        return sinkConfig;
+        sourceConfig.setCustomRuntimeOptions(new Gson().toJson(customRuntimeOptions));
+        return sourceConfig;
     }
 
-    private V1alpha1SinkSpec buildV1alpha1SinkSpecForGetSinkInfo() {
-        V1alpha1SinkSpec mockSinkSpec = mock(V1alpha1SinkSpec.class);
-        V1alpha1SinkSpecInput mockSinkSpecInput = mock(V1alpha1SinkSpecInput.class);
-        V1alpha1SinkSpecPod mockSinkSpecPod = mock(V1alpha1SinkSpecPod.class);
-        V1alpha1SinkSpecJava mockSinkSpecJava = mock(V1alpha1SinkSpecJava.class);
-        V1alpha1SinkSpecPodResources mockSinkSpecPodResources = createResource();
+    private V1alpha1SourceSpec buildV1alpha1SourceSpecForGetSourceInfo() {
+        V1alpha1SourceSpec mockSourceSpec = mock(V1alpha1SourceSpec.class);
+        V1alpha1SourceSpecPod mockSourceSpecPod = mock(V1alpha1SourceSpecPod.class);
+        V1alpha1SourceSpecJava mockSourceSpecJava = mock(V1alpha1SourceSpecJava.class);
+        V1alpha1SourceSpecPodResources mockSourceSpecPodResources = createResource();
 
-        when(mockSinkSpec.getReplicas()).thenReturn(1);
-        when(mockSinkSpec.getProcessingGuarantee()).thenReturn(
-                V1alpha1SinkSpec.ProcessingGuaranteeEnum.ATLEAST_ONCE);
+        when(mockSourceSpec.getReplicas()).thenReturn(1);
+        when(mockSourceSpec.getProcessingGuarantee()).thenReturn(
+                V1alpha1SourceSpec.ProcessingGuaranteeEnum.ATLEAST_ONCE);
 
-        when(mockSinkSpec.getInput()).thenReturn(mockSinkSpecInput);
-        when(mockSinkSpecInput.getTopics()).thenReturn(Collections.singletonList(inputTopic));
+        when(mockSourceSpec.getClusterName()).thenReturn(pulsarFunctionCluster);
+        when(mockSourceSpec.getMaxReplicas()).thenReturn(2);
 
-        when(mockSinkSpec.getClusterName()).thenReturn(pulsarFunctionCluster);
-        when(mockSinkSpec.getMaxReplicas()).thenReturn(2);
+        when(mockSourceSpec.getPod()).thenReturn(mockSourceSpecPod);
+        when(mockSourceSpecPod.getServiceAccountName()).thenReturn(serviceAccount);
 
-        when(mockSinkSpec.getPod()).thenReturn(mockSinkSpecPod);
-        when(mockSinkSpecPod.getServiceAccountName()).thenReturn(serviceAccount);
+        when(mockSourceSpec.getJava()).thenReturn(mockSourceSpecJava);
+        when(mockSourceSpecJava.getJar()).thenReturn("test.jar");
+        when(mockSourceSpecJava.getJarLocation()).thenReturn("public/default/test");
 
-        when(mockSinkSpec.getSubscriptionName()).thenReturn(outputTopic);
-        when(mockSinkSpec.getRetainOrdering()).thenReturn(false);
-        when(mockSinkSpec.getCleanupSubscription()).thenReturn(false);
-        when(mockSinkSpec.getAutoAck()).thenReturn(false);
-        when(mockSinkSpec.getTimeout()).thenReturn(100);
+        when(mockSourceSpec.getClassName()).thenReturn("org.example.functions.testFunction");
 
-        when(mockSinkSpec.getJava()).thenReturn(mockSinkSpecJava);
-        when(mockSinkSpecJava.getJar()).thenReturn("test.jar");
-        when(mockSinkSpecJava.getJarLocation()).thenReturn("public/default/test");
+        when(mockSourceSpec.getResources()).thenReturn(mockSourceSpecPodResources);
 
-        when(mockSinkSpec.getMaxMessageRetry()).thenReturn(3);
-        when(mockSinkSpec.getClassName()).thenReturn("org.example.functions.testFunction");
-
-        when(mockSinkSpec.getResources()).thenReturn(mockSinkSpecPodResources);
-
-        return mockSinkSpec;
+        return mockSourceSpec;
     }
 
-    private void verifyParameterForCreate(V1alpha1Sink v1alpha1SinkOrigin, V1alpha1Sink v1alpha1SinkFinal) {
-        v1alpha1SinkOrigin.getSpec().setImage(runnerImage);
-        v1alpha1SinkOrigin.getSpec().getPod().setServiceAccountName(serviceAccountName);
-        //if authenticationEnabled=true,v1alpha1SinkOrigin should set pod policy
+    private void verifyParameterForCreate(V1alpha1Source v1alpha1SourceOrigin, V1alpha1Source v1alpha1SourceFinal) {
+        v1alpha1SourceOrigin.getSpec().setImage(runnerImage);
+        v1alpha1SourceOrigin.getSpec().getPod().setServiceAccountName(serviceAccountName);
+        //if authenticationEnabled=true,v1alpha1SourceOrigin should set pod policy
 
-        Assert.assertEquals(v1alpha1SinkOrigin, v1alpha1SinkFinal);
+        Assert.assertEquals(v1alpha1SourceOrigin, v1alpha1SourceFinal);
     }
 
 
-    private void verifyParameterForUpdate(V1alpha1Sink v1alpha1SinkOrigin, V1alpha1Sink v1alpha1SinkFinal) {
-        v1alpha1SinkOrigin.getSpec().setImage(runnerImage);
-        v1alpha1SinkOrigin.getSpec().getPod().setServiceAccountName(serviceAccountName);
-        v1alpha1SinkOrigin.getMetadata().setResourceVersion("899291");
-        //if authenticationEnabled=true,v1alpha1SinkOrigin should set pod policy
+    private void verifyParameterForUpdate(V1alpha1Source v1alpha1SourceOrigin, V1alpha1Source v1alpha1SourceFinal) {
+        v1alpha1SourceOrigin.getSpec().setImage(runnerImage);
+        v1alpha1SourceOrigin.getSpec().getPod().setServiceAccountName(serviceAccountName);
+        v1alpha1SourceOrigin.getMetadata().setResourceVersion("899291");
+        //if authenticationEnabled=true,v1alpha1SourceOrigin should set pod policy
 
-        Assert.assertEquals(v1alpha1SinkOrigin, v1alpha1SinkFinal);
+        Assert.assertEquals(v1alpha1SourceOrigin, v1alpha1SourceFinal);
     }
 
     private Resources mockResources(Double cpu, Long ram, Long disk) {
@@ -388,20 +378,20 @@ public class SinksImplV2Test {
         return resources;
     }
 
-    private V1alpha1SinkSpecPodResources createResource() {
-        V1alpha1SinkSpecPodResources mockSinkSpecPodResources = mock(V1alpha1SinkSpecPodResources.class);
-        when(mockSinkSpecPodResources.getLimits()).thenReturn(new HashMap<String, Object>() {{
+    private V1alpha1SourceSpecPodResources createResource() {
+        V1alpha1SourceSpecPodResources mockSourceSpecPodResources = mock(V1alpha1SourceSpecPodResources.class);
+        when(mockSourceSpecPodResources.getLimits()).thenReturn(new HashMap<String, Object>() {{
             put(CPU_KEY, "0.1");
             put(MEMORY_KEY, "2048");
         }});
-        when(mockSinkSpecPodResources.getRequests()).thenReturn(new HashMap<String, Object>() {{
+        when(mockSourceSpecPodResources.getRequests()).thenReturn(new HashMap<String, Object>() {{
             put(CPU_KEY, "0.1");
             put(MEMORY_KEY, "2048");
         }});
-        return mockSinkSpecPodResources;
+        return mockSourceSpecPodResources;
     }
 
-    private SinkConfig expectSinkConfigForSinkInfo() {
+    private SourceConfig expectSourceConfigForSourceInfo() {
         CustomRuntimeOptions customRuntimeOptionsExpect = new CustomRuntimeOptions();
         customRuntimeOptionsExpect.setClusterName(pulsarFunctionCluster);
         customRuntimeOptionsExpect.setMaxReplicas(2);
@@ -415,24 +405,17 @@ public class SinksImplV2Test {
         Map<String, ConsumerConfig> inputSpecsExpect = new HashMap<>();
         inputSpecsExpect.put(inputTopic, new ConsumerConfig());
 
-        return SinkConfig.builder()
-                .name(sinkName)
+        return SourceConfig.builder()
+                .name(sourceName)
                 .namespace(namespace)
                 .tenant(tenant)
                 .parallelism(1)
                 .processingGuarantees(FunctionConfig.ProcessingGuarantees.ATLEAST_ONCE)
-                .retainOrdering(false)
-                .cleanupSubscription(false)
-                .autoAck(false)
-                .timeoutMs(100L)
-                .sourceSubscriptionName(outputTopic)
                 .archive("test.jar")
-                .inputSpecs(inputSpecsExpect)
-                .inputs(inputSpecsExpect.keySet())
-                .maxMessageRetries(3)
                 .className("org.example.functions.testFunction")
                 .resources(resourcesExpect)
                 .customRuntimeOptions(customRuntimeOptionsJSON)
                 .build();
     }
+
 }

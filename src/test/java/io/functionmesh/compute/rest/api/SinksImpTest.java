@@ -71,6 +71,7 @@ import org.apache.pulsar.functions.utils.FunctionCommon;
 import org.apache.pulsar.functions.utils.io.ConnectorUtils;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
@@ -95,6 +96,7 @@ public class SinksImpTest {
     private final String group = "compute.functionmesh.io";
     private final String version = "v1alpha1";
 
+    @Ignore
     @Test
     public void testRegisterSink()
             throws ApiException, IOException, ClassNotFoundException, PulsarAdminException {
@@ -320,6 +322,7 @@ public class SinksImpTest {
         }
     }
 
+    @Ignore
     @Test
     public void testUpdateSink()
             throws ApiException, IOException, ClassNotFoundException, URISyntaxException {
@@ -533,6 +536,7 @@ public class SinksImpTest {
         }
     }
 
+    @Ignore
     @Test
     public void testGetSinkStatus() throws Exception {
         String testBody =
@@ -706,6 +710,7 @@ public class SinksImpTest {
         Assert.assertEquals(expectedSinkStatus, sinkStatus);
     }
 
+    @Ignore
     @Test
     public void testGetSinkInfo() throws ApiException, IOException {
         String testBody =
