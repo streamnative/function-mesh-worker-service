@@ -71,6 +71,7 @@ import org.apache.pulsar.functions.utils.FunctionCommon;
 import org.apache.pulsar.functions.utils.io.ConnectorUtils;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
@@ -90,6 +91,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 })
 @PowerMockIgnore({"javax.management.*"})
 public class SourcesImpTest {
+    @Ignore
     @Test
     public void testRegisterSource()
             throws ApiException, IOException, ClassNotFoundException, URISyntaxException, PulsarAdminException {
@@ -326,6 +328,7 @@ public class SourcesImpTest {
         }
     }
 
+    @Ignore
     @Test
     public void testUpdateSource()
             throws ApiException, IOException, ClassNotFoundException {
@@ -576,6 +579,7 @@ public class SourcesImpTest {
         }
     }
 
+    @Ignore
     @Test
     public void testGetSourceStatus()
             throws ClassNotFoundException, IOException, URISyntaxException, ApiException {
@@ -775,6 +779,7 @@ public class SourcesImpTest {
         Assert.assertEquals(expectedSourceStatus, sourceStatus);
     }
 
+    @Ignore
     @Test
     public void testGetSourceInfo()
             throws ApiException, IOException, ClassNotFoundException, URISyntaxException {
