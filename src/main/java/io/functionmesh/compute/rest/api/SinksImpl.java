@@ -36,7 +36,6 @@ import io.functionmesh.compute.util.PackageManagementServiceUtil;
 import io.functionmesh.compute.util.SinksUtil;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.kubernetes.client.openapi.apis.CustomObjectsApi;
 import io.kubernetes.client.openapi.models.V1ContainerState;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1Pod;
@@ -55,7 +54,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.Call;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.broker.authentication.AuthenticationDataHttps;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
@@ -172,19 +170,7 @@ public class SinksImpl extends MeshComponentImpl<V1alpha1Sink, V1alpha1SinkList>
         v1alpha1Sink.getMetadata().setNamespace(worker().getJobNamespace());
         try {
             this.upsertSink(tenant, namespace, sinkName, sinkConfig, v1alpha1Sink, clientAuthenticationDataHttps);
-            Call call =
-                    worker().getCustomObjectsApi()
-                            .createNamespacedCustomObjectCall(
-                                    API_GROUP,
-                                    apiVersion,
-                                    worker().getJobNamespace(),
-                                    apiPlural,
-                                    v1alpha1Sink,
-                                    null,
-                                    null,
-                                    null,
-                                    null);
-            executeCall(call, V1alpha1Sink.class);
+            extractResponse(getResourceApi().create(v1alpha1Sink));
         } catch (RestException restException) {
             log.error(
                     "register {}/{}/{} sink failed",
@@ -248,33 +234,20 @@ public class SinksImpl extends MeshComponentImpl<V1alpha1Sink, V1alpha1SinkList>
                             uploadedInputStream,
                             sinkConfig, this.meshWorkerServiceSupplier.get().getConnectorsManager(),
                             cluster, worker());
-            CustomObjectsApi customObjectsApi = worker().getCustomObjectsApi();
-            Call getCall =
-                    customObjectsApi.getNamespacedCustomObjectCall(
-                            API_GROUP, apiVersion,
-                            worker().getJobNamespace(), apiPlural,
-                            v1alpha1Sink.getMetadata().getName(), null);
-            V1alpha1Sink oldRes = executeCall(getCall, V1alpha1Sink.class);
-            if (oldRes.getMetadata() == null || oldRes.getMetadata().getLabels() == null) {
+
+            String nameSpaceName = worker().getJobNamespace();
+            String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, sinkName);
+            V1alpha1Sink v1alpha1Sink1Pre = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+            if (v1alpha1Sink1Pre.getMetadata() == null || v1alpha1Sink1Pre.getMetadata().getLabels() == null) {
                 log.error("update {}/{}/{} sink failed, the sink resource cannot be found", tenant, namespace,
                         sinkName);
                 throw new RestException(Response.Status.NOT_FOUND, "This sink resource was not found");
             }
             v1alpha1Sink.getMetadata().setNamespace(worker().getJobNamespace());
-            v1alpha1Sink.getMetadata().setResourceVersion(oldRes.getMetadata().getResourceVersion());
+            v1alpha1Sink.getMetadata().setResourceVersion(v1alpha1Sink1Pre.getMetadata().getResourceVersion());
 
             this.upsertSink(tenant, namespace, sinkName, sinkConfig, v1alpha1Sink, clientAuthenticationDataHttps);
-            Call replaceCall = customObjectsApi.replaceNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Sink.getMetadata().getName(),
-                    v1alpha1Sink,
-                    null,
-                    null,
-                    null);
-            executeCall(replaceCall, Object.class);
+            extractResponse(getResourceApi().update(v1alpha1Sink));
         } catch (Exception e) {
             log.error(
                     "update {}/{}/{} sink failed",
@@ -319,12 +292,7 @@ public class SinksImpl extends MeshComponentImpl<V1alpha1Sink, V1alpha1SinkList>
         try {
             String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
             String nameSpaceName = worker().getJobNamespace();
-            Call call =
-                    worker().getCustomObjectsApi()
-                            .getNamespacedCustomObjectCall(
-                                    API_GROUP, apiVersion, nameSpaceName,
-                                    apiPlural, hashName, null);
-            V1alpha1Sink v1alpha1Sink = executeCall(call, V1alpha1Sink.class);
+            V1alpha1Sink v1alpha1Sink = extractResponse(getResourceApi().get(nameSpaceName, hashName));
             V1alpha1SinkStatus v1alpha1SinkStatus = v1alpha1Sink.getStatus();
             if (v1alpha1SinkStatus == null) {
                 log.error(
@@ -568,14 +536,9 @@ public class SinksImpl extends MeshComponentImpl<V1alpha1Sink, V1alpha1SinkList>
         validateSinkEnabled();
         this.validateGetInfoRequestParams(tenant, namespace, componentName, apiKind);
         try {
+            String nameSpaceName = worker().getJobNamespace();
             String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
-            Call call =
-                    worker().getCustomObjectsApi()
-                            .getNamespacedCustomObjectCall(
-                                    API_GROUP, apiVersion, worker().getJobNamespace(),
-                                    apiPlural, hashName, null);
-
-            V1alpha1Sink v1alpha1Sink = executeCall(call, V1alpha1Sink.class);
+            V1alpha1Sink v1alpha1Sink = extractResponse(getResourceApi().get(nameSpaceName, hashName));
             return SinksUtil.createSinkConfigFromV1alpha1Sink(
                     tenant, namespace, componentName, v1alpha1Sink);
         } catch (Exception e) {

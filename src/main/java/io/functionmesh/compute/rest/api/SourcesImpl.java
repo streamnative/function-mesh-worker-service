@@ -54,7 +54,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.Call;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.broker.authentication.AuthenticationDataHttps;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
@@ -182,15 +181,7 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
         try {
             this.upsertSource(tenant, namespace, sourceName, sourceConfig, v1alpha1Source,
                     clientAuthenticationDataHttps);
-            Call call = worker().getCustomObjectsApi().createNamespacedCustomObjectCall(
-                    API_GROUP, apiVersion, worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Source,
-                    null,
-                    null,
-                    null,
-                    null);
-            executeCall(call, V1alpha1Source.class);
+            extractResponse(getResourceApi().create(v1alpha1Source));
         } catch (RestException restException) {
             log.error(
                     "register {}/{}/{} source failed",
@@ -248,37 +239,21 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
                             sourceConfig,
                             this.meshWorkerServiceSupplier.get().getConnectorsManager(),
                             cluster, worker());
-            Call getCall = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Source.getMetadata().getName(),
-                    null
-            );
-            V1alpha1Source oldRes = executeCall(getCall, V1alpha1Source.class);
-            if (oldRes.getMetadata() == null || oldRes.getMetadata().getLabels() == null) {
+
+            String nameSpaceName = worker().getJobNamespace();
+            String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, sourceName);
+            V1alpha1Source v1alpha1SourcePre = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+            if (v1alpha1SourcePre.getMetadata() == null || v1alpha1SourcePre.getMetadata().getLabels() == null) {
                 log.error("update {}/{}/{} source failed, the source resource cannot be found", tenant, namespace,
                         sourceName);
                 throw new RestException(Response.Status.NOT_FOUND, "This source resource was not found");
             }
 
             v1alpha1Source.getMetadata().setNamespace(worker().getJobNamespace());
-            v1alpha1Source.getMetadata().setResourceVersion(oldRes.getMetadata().getResourceVersion());
+            v1alpha1Source.getMetadata().setResourceVersion(v1alpha1SourcePre.getMetadata().getResourceVersion());
             this.upsertSource(tenant, namespace, sourceName, sourceConfig, v1alpha1Source,
                     clientAuthenticationDataHttps);
-            Call replaceCall = worker().getCustomObjectsApi().replaceNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Source.getMetadata().getName(),
-                    v1alpha1Source,
-                    null,
-                    null,
-                    null
-            );
-            executeCall(replaceCall, Object.class);
+            extractResponse(getResourceApi().update(v1alpha1Source));
         } catch (Exception e) {
             log.error("update {}/{}/{} source failed", tenant, namespace, sourceConfig, e);
             throw new RestException(Response.Status.INTERNAL_SERVER_ERROR, e.getMessage());
@@ -302,10 +277,7 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
         try {
             String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
             String nameSpaceName = worker().getJobNamespace();
-            Call call = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP, apiVersion, nameSpaceName,
-                    apiPlural, hashName, null);
-            V1alpha1Source v1alpha1Source = executeCall(call, V1alpha1Source.class);
+            V1alpha1Source v1alpha1Source = extractResponse(getResourceApi().get(nameSpaceName, hashName));
             V1alpha1SourceStatus v1alpha1SourceStatus = v1alpha1Source.getStatus();
             if (v1alpha1SourceStatus == null) {
                 log.error(
@@ -543,12 +515,12 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
     }
 
     public SourceInstanceStatusData getSourceInstanceStatus(final String tenant,
-                                                              final String namespace,
-                                                              final String sourceName,
-                                                              final String instanceId,
-                                                              final URI uri,
-                                                              final String clientRole,
-                                                              final AuthenticationDataSource dataSource) {
+                                                            final String namespace,
+                                                            final String sourceName,
+                                                            final String instanceId,
+                                                            final URI uri,
+                                                            final String clientRole,
+                                                            final AuthenticationDataSource dataSource) {
         validateSourceEnabled();
         return new SourceInstanceStatusData();
     }
@@ -558,18 +530,12 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
                                       final String componentName) {
         validateSourceEnabled();
         this.validateGetInfoRequestParams(tenant, namespace, componentName, apiKind);
-        String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
-        try {
-            Call call = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    hashName,
-                    null
-            );
 
-            V1alpha1Source v1alpha1Source = executeCall(call, V1alpha1Source.class);
+        try {
+            String nameSpaceName = worker().getJobNamespace();
+            String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
+            V1alpha1Source v1alpha1Source = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+
             return SourcesUtil.createSourceConfigFromV1alpha1Source(tenant, namespace, componentName, v1alpha1Source);
         } catch (Exception e) {
             log.error("Get source info {}/{}/{} {} failed", tenant, namespace, componentName, apiPlural, e);
