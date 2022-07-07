@@ -20,11 +20,13 @@ package io.functionmesh.compute.rest.api;
 
 import static io.functionmesh.compute.util.FunctionsUtil.CPU_KEY;
 import static io.functionmesh.compute.util.FunctionsUtil.MEMORY_KEY;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import com.google.gson.Gson;
 import io.functionmesh.compute.MeshWorkerService;
@@ -40,6 +42,7 @@ import io.functionmesh.compute.functions.models.V1alpha1FunctionStatus;
 import io.functionmesh.compute.models.CustomRuntimeOptions;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
 import io.functionmesh.compute.util.CommonUtil;
+import io.functionmesh.compute.util.FunctionsUtil;
 import io.functionmesh.compute.util.PackageManagementServiceUtil;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
@@ -75,6 +78,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.powermock.api.mockito.PowerMockito;
@@ -88,7 +92,6 @@ import org.powermock.modules.junit4.PowerMockRunner;
         CommonUtil.class})
 @PowerMockIgnore({"javax.management.*"})
 public class FunctionImplV2Test {
-
     private static final String tenant = "test-tenant";
     private static final String namespace = "test-namespace";
     private static final String function = "test-function";
@@ -98,6 +101,12 @@ public class FunctionImplV2Test {
     private static final String pulsarFunctionCluster = "test-pulsar";
     private static final String kubernetesNamespace = "test";
     private static final String serviceAccount = "test-account";
+
+    private static final String API_GROUP = "compute.functionmesh.io";
+    private static final String apiVersion = "v1alpha1";
+    private static final String apiFunctionKind = "Function";
+    private static final String runnerImage = "custom-image";
+    private static final String serviceAccountName = "custom-account-name";
 
     private MeshWorkerService meshWorkerService;
     private PulsarAdmin mockedPulsarAdmin;
@@ -208,6 +217,7 @@ public class FunctionImplV2Test {
         MeshWorkerServiceCustomConfig meshWorkerServiceCustomConfig = mock(MeshWorkerServiceCustomConfig.class);
         when(meshWorkerServiceCustomConfig.isUploadEnabled()).thenReturn(true);
         when(meshWorkerServiceCustomConfig.isFunctionEnabled()).thenReturn(true);
+        when(meshWorkerServiceCustomConfig.isEnableTrustedMode()).thenReturn(true);
         return meshWorkerServiceCustomConfig;
     }
 
@@ -228,7 +238,7 @@ public class FunctionImplV2Test {
                 .fetchStatsFromGRPC(any(), any(), any(), any(), any(), any(), any());
         FunctionStatsImpl functionStats = this.resource.getFunctionStats(tenant, namespace, function, null, null, null);
         Assert.assertNotNull(functionStats);
-        Assert.assertEquals(functionStats.instances.size(), 1);
+        assertEquals(functionStats.instances.size(), 1);
     }
 
     private void mockStaticMethod() {
@@ -266,6 +276,11 @@ public class FunctionImplV2Test {
         when(functionConfig.getMaxMessageRetries()).thenReturn(3);
         when(functionConfig.getParallelism()).thenReturn(2);
 
+        CustomRuntimeOptions customRuntimeOptions = new CustomRuntimeOptions();
+        customRuntimeOptions.setRunnerImage(runnerImage);
+        customRuntimeOptions.setServiceAccountName(serviceAccountName);
+        when(functionConfig.getCustomRuntimeOptions()).thenReturn(new Gson().toJson(customRuntimeOptions));
+
         return functionConfig;
     }
 
@@ -277,8 +292,17 @@ public class FunctionImplV2Test {
         return resources;
     }
 
+    private void verifyParameterForCreate(V1alpha1Function v1alpha1FunctionOrigin,
+                                          V1alpha1Function v1alpha1FunctionFinal) {
+        v1alpha1FunctionOrigin.getSpec().setImage(runnerImage);
+        v1alpha1FunctionOrigin.getSpec().getPod().setServiceAccountName(serviceAccountName);
+        //if authenticationEnabled=true,v1alpha1FunctionOrigin should set pod policy
+
+        Assert.assertEquals(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
+    }
+
     @Test
-    public void registerFunctionTest() throws Exception {
+    public void registerFunctionTest() {
         FunctionConfig functionConfig = mockFunctionConfig();
         mockStaticMethod();
 
@@ -297,6 +321,27 @@ public class FunctionImplV2Test {
                     restException.getMessage()));
         }
 
+        V1alpha1Function v1alpha1FunctionOrigin =
+                FunctionsUtil.createV1alpha1FunctionFromFunctionConfig(apiFunctionKind, API_GROUP, apiVersion, function,
+                        functionConfig.getJar(), functionConfig,
+                        meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(), meshWorkerService);
+
+        ArgumentCaptor<V1alpha1Function> v1alpha1FunctionArgumentCaptor =
+                ArgumentCaptor.forClass(V1alpha1Function.class);
+        verify(mockedKubernetesApi).create(v1alpha1FunctionArgumentCaptor.capture());
+        V1alpha1Function v1alpha1FunctionFinal = v1alpha1FunctionArgumentCaptor.getValue();
+
+        verifyParameterForCreate(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
+    }
+
+    private void verifyParameterForUpdate(V1alpha1Function v1alpha1FunctionOrigin,
+                                          V1alpha1Function v1alpha1FunctionFinal) {
+        v1alpha1FunctionOrigin.getSpec().setImage(runnerImage);
+        v1alpha1FunctionOrigin.getSpec().getPod().setServiceAccountName(serviceAccountName);
+        v1alpha1FunctionOrigin.getMetadata().setResourceVersion("899291");
+        //if authenticationEnabled=true,v1alpha1FunctionOrigin should set pod policy
+
+        Assert.assertEquals(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
     }
 
     @Test
@@ -325,6 +370,18 @@ public class FunctionImplV2Test {
                     function,
                     restException.getMessage()));
         }
+
+        V1alpha1Function v1alpha1FunctionOrigin =
+                FunctionsUtil.createV1alpha1FunctionFromFunctionConfig(apiFunctionKind, API_GROUP, apiVersion, function,
+                        functionConfig.getJar(), functionConfig,
+                        meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(), meshWorkerService);
+
+        ArgumentCaptor<V1alpha1Function> v1alpha1FunctionArgumentCaptor =
+                ArgumentCaptor.forClass(V1alpha1Function.class);
+        verify(mockedKubernetesApi).update(v1alpha1FunctionArgumentCaptor.capture());
+        V1alpha1Function v1alpha1FunctionFinal = v1alpha1FunctionArgumentCaptor.getValue();
+        verifyParameterForUpdate(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
+
     }
 
     private V1alpha1FunctionSpec buildV1alpha1FunctionSpecForGetFunctionInfo() {
@@ -430,7 +487,7 @@ public class FunctionImplV2Test {
 
         FunctionConfig functionConfig = this.resource.getFunctionInfo(tenant, namespace, function, null, null);
         Assert.assertNotNull(functionConfig);
-        Assert.assertEquals(expectFunctionConfig(), functionConfig);
+        assertEquals(expectFunctionConfig(), functionConfig);
     }
 
     @Test
@@ -451,7 +508,6 @@ public class FunctionImplV2Test {
                 .fetchFunctionStatusFromGRPC(any(), any(), any(), any(), any(), any(), any(), any());
         FunctionStatus functionStatus = this.resource.getFunctionStatus(tenant, namespace, function, null, null, null);
         Assert.assertNotNull(functionStatus);
-        Assert.assertEquals(1, functionStatus.instances.size());
+        assertEquals(1, functionStatus.instances.size());
     }
-
 }
