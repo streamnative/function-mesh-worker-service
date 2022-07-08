@@ -79,6 +79,7 @@ public class CommonUtil {
     public static final String TENANT_LABEL_CLAIM = "pulsar-tenant";
     public static final String NAMESPACE_LABEL_CLAIM = "pulsar-namespace";
     public static final String COMPONENT_LABEL_CLAIM = "pulsar-component";
+    public static final String ANNOTATION_MANAGED = "compute.functionmesh.io/managed";
     private static final String CLUSTER_NAME_ENV = "clusterName";
 
     public static String getClusterNameEnv() {
@@ -130,6 +131,16 @@ public class CommonUtil {
         v1ObjectMeta.setLabels(customLabelClaims);
 
         return v1ObjectMeta;
+    }
+
+    public static void setManaged(CustomRuntimeOptions customRuntimeOptions, V1ObjectMeta objectMeta) {
+        try {
+            if (objectMeta.getAnnotations().containsKey(ANNOTATION_MANAGED)) {
+                customRuntimeOptions.setManaged(objectMeta.getAnnotations().get(ANNOTATION_MANAGED).equals("true"));
+            }
+        } catch (NullPointerException e) { // ignore null pointer exception
+
+        }
     }
 
     public static String createObjectName(String cluster, String tenant, String namespace, String functionName) {

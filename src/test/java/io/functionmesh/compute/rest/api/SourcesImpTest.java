@@ -916,7 +916,7 @@ public class SourcesImpTest {
         Double cpu = 0.1;
         Long ram = 1L;
         String clusterName = "test-pulsar";
-        String customRuntimeOptions = "{\"clusterName\":\"" + clusterName + "\",\"maxReplicas\":1}";
+        String customRuntimeOptions = "{\"clusterName\":\"" + clusterName + "\",\"maxReplicas\":1,\"managed\":true}";
         Map<String, Object> configs = new HashMap<>();
         String configsName = "test-sourceConfig";
         configs.put("name", configsName);

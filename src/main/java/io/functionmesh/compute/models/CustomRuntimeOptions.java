@@ -29,6 +29,9 @@ public class CustomRuntimeOptions {
     private int maxReplicas;
 
     @TrustedModeOnly
+    private boolean managed = true;
+
+    @TrustedModeOnly
     private String serviceAccountName;
 
     @TrustedModeOnly
