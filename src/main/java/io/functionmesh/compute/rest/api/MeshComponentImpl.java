@@ -117,21 +117,9 @@ public abstract class MeshComponentImpl<T extends io.kubernetes.client.common.Ku
                 ComponentTypeUtils.toString(componentType));
         try {
             String clusterName = worker().getWorkerConfig().getPulsarFunctionsCluster();
+            String nameSpaceName = worker().getJobNamespace();
             String hashName = CommonUtil.createObjectName(clusterName, tenant, namespace, componentName);
-            Call deleteObjectCall = worker().getCustomObjectsApi().deleteNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    hashName,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-            );
-            executeCall(deleteObjectCall, null);
+            getResourceApi().delete(nameSpaceName, hashName);
 
             if (worker().getMeshWorkerServiceCustomConfig().isUploadEnabled()) {
                 PackageManagementServiceUtil.deletePackageFromPackageService(

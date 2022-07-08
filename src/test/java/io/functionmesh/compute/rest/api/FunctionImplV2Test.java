@@ -44,6 +44,7 @@ import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
 import io.functionmesh.compute.util.CommonUtil;
 import io.functionmesh.compute.util.FunctionsUtil;
 import io.functionmesh.compute.util.PackageManagementServiceUtil;
+import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.models.V1ContainerStatus;
 import io.kubernetes.client.openapi.models.V1ObjectMeta;
 import io.kubernetes.client.openapi.models.V1Pod;
@@ -119,6 +120,8 @@ public class FunctionImplV2Test {
 
     @Mock
     private GenericKubernetesApi<V1alpha1Function, V1alpha1FunctionList> mockedKubernetesApi;
+    @Mock
+    private CoreV1Api coreV1Api;
 
     @Mock
     private KubernetesApiResponse<V1alpha1Function> mockedKubernetesApiResponse;
@@ -152,6 +155,7 @@ public class FunctionImplV2Test {
         when(meshWorkerService.getBrokerAdmin()).thenReturn(mockedPulsarAdmin);
         when(meshWorkerService.getJobNamespace()).thenReturn(kubernetesNamespace);
         when(meshWorkerService.getMeshWorkerServiceCustomConfig()).thenReturn(meshWorkerServiceCustomConfig);
+        when(meshWorkerService.getCoreV1Api()).thenReturn(coreV1Api);
 
         initFunctionStatefulSet();
 
@@ -164,6 +168,8 @@ public class FunctionImplV2Test {
         when(mockedKubernetesApi.create(any())).thenReturn(mockedKubernetesApiResponse);
         when(mockedKubernetesApi.update(any())).thenReturn(mockedKubernetesApiResponse);
         when(mockedKubernetesApiResponse.isSuccess()).thenReturn(true);
+
+        mockStaticMethod();
     }
 
     private void initFunctionStatefulSet() {
@@ -221,6 +227,16 @@ public class FunctionImplV2Test {
         return meshWorkerServiceCustomConfig;
     }
 
+    private void mockStaticMethod() {
+        PowerMockito.stub(PowerMockito.method(PackageManagementServiceUtil.class, "uploadPackageToPackageService"))
+                .toReturn("test.jar");
+        PowerMockito.stub(PowerMockito.method(PackageManagementServiceUtil.class, "deletePackageFromPackageService"))
+                .toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
+        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
+                .toReturn("test.jar");
+    }
+
     @Test
     public void getFunctionStatsTest() {
         V1alpha1Function functionResource = mock(V1alpha1Function.class);
@@ -241,12 +257,125 @@ public class FunctionImplV2Test {
         assertEquals(functionStats.instances.size(), 1);
     }
 
-    private void mockStaticMethod() {
-        PowerMockito.stub(PowerMockito.method(PackageManagementServiceUtil.class, "uploadPackageToPackageService"))
-                .toReturn("test.jar");
-        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "downloadPackageFile")).toReturn(null);
-        PowerMockito.stub(PowerMockito.method(CommonUtil.class, "getFilenameFromPackageMetadata"))
-                .toReturn("test.jar");
+    @Test
+    public void registerFunctionTest() {
+        FunctionConfig functionConfig = mockFunctionConfig();
+
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+        try {
+            this.resource.registerFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
+                    functionConfig, null, null);
+        } catch (
+                RestException restException) {
+            Assert.fail(String.format(
+                    "register {}/{}/{} function failed, error message: {}",
+                    tenant,
+                    namespace,
+                    function,
+                    restException.getMessage()));
+        }
+
+        V1alpha1Function v1alpha1FunctionOrigin =
+                FunctionsUtil.createV1alpha1FunctionFromFunctionConfig(apiFunctionKind, API_GROUP, apiVersion, function,
+                        functionConfig.getJar(), functionConfig,
+                        meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(), meshWorkerService);
+
+        ArgumentCaptor<V1alpha1Function> v1alpha1FunctionArgumentCaptor =
+                ArgumentCaptor.forClass(V1alpha1Function.class);
+        verify(mockedKubernetesApi).create(v1alpha1FunctionArgumentCaptor.capture());
+        V1alpha1Function v1alpha1FunctionFinal = v1alpha1FunctionArgumentCaptor.getValue();
+
+        verifyParameterForCreate(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
+    }
+
+    @Test
+    public void deregisterFunctionTest() throws Exception {
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+
+        doReturn(functionResource).when(resource).executeCall(any(), any());
+        when(meshWorkerService.getWorkerConfig().getBrokerClientAuthenticationPlugin()).thenReturn("auth-enable");
+        when(meshWorkerService.getWorkerConfig().getBrokerClientAuthenticationParameters()).thenReturn(
+                "auth-param-test");
+
+        try {
+            this.resource.deregisterFunction(tenant, namespace, function, null, null);
+        } catch (Exception exception) {
+            Assert.fail("Expected no exception to be thrown but got exception: " + exception);
+        }
+    }
+
+    @Test
+    public void updateFunctionTest() {
+        FunctionConfig functionConfig = mockFunctionConfig();
+
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        V1ObjectMeta functionMeta = mock(V1ObjectMeta.class);
+
+        when(functionResource.getMetadata()).thenReturn(functionMeta);
+        when(functionResource.getMetadata().getResourceVersion()).thenReturn("899291");
+        when(functionResource.getMetadata().getLabels()).thenReturn(Collections.singletonMap("foo", "bar"));
+
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+
+        try {
+            this.resource.updateFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
+                    functionConfig, null, null, null);
+        } catch (
+                RestException restException) {
+            Assert.fail(String.format(
+                    "updateFunction {}/{}/{} sink failed, error message: {}",
+                    tenant,
+                    namespace,
+                    function,
+                    restException.getMessage()));
+        }
+
+        V1alpha1Function v1alpha1FunctionOrigin =
+                FunctionsUtil.createV1alpha1FunctionFromFunctionConfig(apiFunctionKind, API_GROUP, apiVersion, function,
+                        functionConfig.getJar(), functionConfig,
+                        meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(), meshWorkerService);
+
+        ArgumentCaptor<V1alpha1Function> v1alpha1FunctionArgumentCaptor =
+                ArgumentCaptor.forClass(V1alpha1Function.class);
+        verify(mockedKubernetesApi).update(v1alpha1FunctionArgumentCaptor.capture());
+        V1alpha1Function v1alpha1FunctionFinal = v1alpha1FunctionArgumentCaptor.getValue();
+        verifyParameterForUpdate(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
+    }
+
+    @Test
+    public void getFunctionInfoTest() {
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        V1alpha1FunctionSpec functionSpec = buildV1alpha1FunctionSpecForGetFunctionInfo();
+
+        when(functionResource.getSpec()).thenReturn(functionSpec);
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+
+        FunctionConfig functionConfig = this.resource.getFunctionInfo(tenant, namespace, function, null, null);
+        Assert.assertNotNull(functionConfig);
+        assertEquals(expectFunctionConfig(), functionConfig);
+    }
+
+    @Test
+    public void getFunctionStatusTest() {
+        V1alpha1Function functionResource = mock(V1alpha1Function.class);
+        V1alpha1FunctionStatus v1alpha1FunctionStatus = mock(V1alpha1FunctionStatus.class);
+        V1ObjectMeta v1ObjectMeta = mock(V1ObjectMeta.class);
+        V1alpha1FunctionSpec v1alpha1FunctionSpec = mock(V1alpha1FunctionSpec.class);
+
+        when(functionResource.getStatus()).thenReturn(v1alpha1FunctionStatus);
+        when(functionResource.getMetadata()).thenReturn(v1ObjectMeta);
+        when(functionResource.getSpec()).thenReturn(v1alpha1FunctionSpec);
+
+        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
+
+        doReturn(Collections.singleton(CompletableFuture.completedFuture(
+                InstanceCommunication.MetricsData.newBuilder().build()))).when(resource)
+                .fetchFunctionStatusFromGRPC(any(), any(), any(), any(), any(), any(), any(), any());
+        FunctionStatus functionStatus = this.resource.getFunctionStatus(tenant, namespace, function, null, null, null);
+        Assert.assertNotNull(functionStatus);
+        assertEquals(1, functionStatus.instances.size());
     }
 
     private FunctionConfig mockFunctionConfig() {
@@ -301,39 +430,6 @@ public class FunctionImplV2Test {
         Assert.assertEquals(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
     }
 
-    @Test
-    public void registerFunctionTest() {
-        FunctionConfig functionConfig = mockFunctionConfig();
-        mockStaticMethod();
-
-        V1alpha1Function functionResource = mock(V1alpha1Function.class);
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
-        try {
-            this.resource.registerFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
-                    functionConfig, null, null);
-        } catch (
-                RestException restException) {
-            Assert.fail(String.format(
-                    "register {}/{}/{} function failed, error message: {}",
-                    tenant,
-                    namespace,
-                    function,
-                    restException.getMessage()));
-        }
-
-        V1alpha1Function v1alpha1FunctionOrigin =
-                FunctionsUtil.createV1alpha1FunctionFromFunctionConfig(apiFunctionKind, API_GROUP, apiVersion, function,
-                        functionConfig.getJar(), functionConfig,
-                        meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(), meshWorkerService);
-
-        ArgumentCaptor<V1alpha1Function> v1alpha1FunctionArgumentCaptor =
-                ArgumentCaptor.forClass(V1alpha1Function.class);
-        verify(mockedKubernetesApi).create(v1alpha1FunctionArgumentCaptor.capture());
-        V1alpha1Function v1alpha1FunctionFinal = v1alpha1FunctionArgumentCaptor.getValue();
-
-        verifyParameterForCreate(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
-    }
-
     private void verifyParameterForUpdate(V1alpha1Function v1alpha1FunctionOrigin,
                                           V1alpha1Function v1alpha1FunctionFinal) {
         v1alpha1FunctionOrigin.getSpec().setImage(runnerImage);
@@ -342,46 +438,6 @@ public class FunctionImplV2Test {
         //if authenticationEnabled=true,v1alpha1FunctionOrigin should set pod policy
 
         Assert.assertEquals(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
-    }
-
-    @Test
-    public void updateFunctionTest() {
-        FunctionConfig functionConfig = mockFunctionConfig();
-        mockStaticMethod();
-
-        V1alpha1Function functionResource = mock(V1alpha1Function.class);
-        V1ObjectMeta functionMeta = mock(V1ObjectMeta.class);
-
-        when(functionResource.getMetadata()).thenReturn(functionMeta);
-        when(functionResource.getMetadata().getResourceVersion()).thenReturn("899291");
-        when(functionResource.getMetadata().getLabels()).thenReturn(Collections.singletonMap("foo", "bar"));
-
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
-
-        try {
-            this.resource.updateFunction(tenant, namespace, function, null, null, functionConfig.getJar(),
-                    functionConfig, null, null, null);
-        } catch (
-                RestException restException) {
-            Assert.fail(String.format(
-                    "updateFunction {}/{}/{} sink failed, error message: {}",
-                    tenant,
-                    namespace,
-                    function,
-                    restException.getMessage()));
-        }
-
-        V1alpha1Function v1alpha1FunctionOrigin =
-                FunctionsUtil.createV1alpha1FunctionFromFunctionConfig(apiFunctionKind, API_GROUP, apiVersion, function,
-                        functionConfig.getJar(), functionConfig,
-                        meshWorkerService.getWorkerConfig().getPulsarFunctionsCluster(), meshWorkerService);
-
-        ArgumentCaptor<V1alpha1Function> v1alpha1FunctionArgumentCaptor =
-                ArgumentCaptor.forClass(V1alpha1Function.class);
-        verify(mockedKubernetesApi).update(v1alpha1FunctionArgumentCaptor.capture());
-        V1alpha1Function v1alpha1FunctionFinal = v1alpha1FunctionArgumentCaptor.getValue();
-        verifyParameterForUpdate(v1alpha1FunctionOrigin, v1alpha1FunctionFinal);
-
     }
 
     private V1alpha1FunctionSpec buildV1alpha1FunctionSpecForGetFunctionInfo() {
@@ -475,39 +531,5 @@ public class FunctionImplV2Test {
                 .resources(resourcesExpect)
                 .customRuntimeOptions(customRuntimeOptionsJSON)
                 .build();
-    }
-
-    @Test
-    public void getFunctionInfoTest() {
-        V1alpha1Function functionResource = mock(V1alpha1Function.class);
-        V1alpha1FunctionSpec functionSpec = buildV1alpha1FunctionSpecForGetFunctionInfo();
-
-        when(functionResource.getSpec()).thenReturn(functionSpec);
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
-
-        FunctionConfig functionConfig = this.resource.getFunctionInfo(tenant, namespace, function, null, null);
-        Assert.assertNotNull(functionConfig);
-        assertEquals(expectFunctionConfig(), functionConfig);
-    }
-
-    @Test
-    public void getFunctionStatusTest() {
-        V1alpha1Function functionResource = mock(V1alpha1Function.class);
-        V1alpha1FunctionStatus v1alpha1FunctionStatus = mock(V1alpha1FunctionStatus.class);
-        V1ObjectMeta v1ObjectMeta = mock(V1ObjectMeta.class);
-        V1alpha1FunctionSpec v1alpha1FunctionSpec = mock(V1alpha1FunctionSpec.class);
-
-        when(functionResource.getStatus()).thenReturn(v1alpha1FunctionStatus);
-        when(functionResource.getMetadata()).thenReturn(v1ObjectMeta);
-        when(functionResource.getSpec()).thenReturn(v1alpha1FunctionSpec);
-
-        when(mockedKubernetesApiResponse.getObject()).thenReturn(functionResource);
-
-        doReturn(Collections.singleton(CompletableFuture.completedFuture(
-                InstanceCommunication.MetricsData.newBuilder().build()))).when(resource)
-                .fetchFunctionStatusFromGRPC(any(), any(), any(), any(), any(), any(), any(), any());
-        FunctionStatus functionStatus = this.resource.getFunctionStatus(tenant, namespace, function, null, null, null);
-        Assert.assertNotNull(functionStatus);
-        assertEquals(1, functionStatus.instances.size());
     }
 }
