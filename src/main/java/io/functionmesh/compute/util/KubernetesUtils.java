@@ -19,9 +19,12 @@
 package io.functionmesh.compute.util;
 
 import static java.net.HttpURLConnection.HTTP_CONFLICT;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
+import io.functionmesh.compute.models.Oauth2Parameters;
 import io.kubernetes.client.common.KubernetesObject;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
@@ -114,8 +117,15 @@ public class KubernetesUtils {
     private static Map<String, byte[]> buildAuthConfigMap(WorkerConfig workerConfig) {
         Map<String, byte[]> valueMap = new HashMap<>();
         valueMap.put(CLIENT_AUTHENTICATION_PLUGIN_CLAIM, workerConfig.getBrokerClientAuthenticationPlugin().getBytes());
-        valueMap.put(CLIENT_AUTHENTICATION_PARAMETERS_CLAIM,
-                workerConfig.getBrokerClientAuthenticationParameters().getBytes());
+        byte[] finalParams = workerConfig.getBrokerClientAuthenticationParameters().getBytes();
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Oauth2Parameters oauth2Parameters = mapper.readValue(workerConfig.getBrokerClientAuthenticationParameters(),
+                    Oauth2Parameters.class);
+            finalParams = mapper.writeValueAsBytes(oauth2Parameters);
+        } catch (JsonProcessingException e) { // use the original parameters when exception happens
+        }
+        valueMap.put(CLIENT_AUTHENTICATION_PARAMETERS_CLAIM, finalParams);
         return valueMap;
     }
 
