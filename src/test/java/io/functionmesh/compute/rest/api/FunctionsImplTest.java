@@ -69,6 +69,7 @@ import org.apache.pulsar.functions.proto.InstanceControlGrpc;
 import org.apache.pulsar.functions.runtime.kubernetes.KubernetesRuntimeFactoryConfig;
 import org.apache.pulsar.functions.worker.WorkerConfig;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
@@ -88,6 +89,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 @PowerMockIgnore({"javax.management.*"})
 @Slf4j
 public class FunctionsImplTest {
+    @Ignore
     @Test
     public void getFunctionStatusTest() throws ApiException, IOException {
         String testBody = "{\n" +
@@ -268,6 +270,7 @@ public class FunctionsImplTest {
         assertEquals(expectedFunctionStatus, functionStatus);
     }
 
+    @Ignore
     @Test
     public void registerFunctionTest() throws ApiException, IOException, PulsarAdminException {
         String testBody = "{\n" +
@@ -412,6 +415,7 @@ public class FunctionsImplTest {
         }
     }
 
+    @Ignore
     @Test
     public void updateFunctionTest() throws ApiException, IOException, PulsarAdminException {
         String getBody = "{\n" +
@@ -614,6 +618,7 @@ public class FunctionsImplTest {
         }
     }
 
+    @Ignore
     @Test
     public void deregisterFunctionTest() throws ApiException, IOException {
 
@@ -777,6 +782,7 @@ public class FunctionsImplTest {
         }
     }
 
+    @Ignore
     @Test
     public void getFunctionInfoTest() throws ApiException, IOException {
         String testBody = "{\n" +

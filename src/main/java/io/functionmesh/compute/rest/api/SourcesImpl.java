@@ -20,6 +20,7 @@ package io.functionmesh.compute.rest.api;
 
 import static io.functionmesh.compute.util.KubernetesUtils.validateResourceOwner;
 import static io.functionmesh.compute.util.KubernetesUtils.validateStatefulSet;
+import com.google.common.annotations.VisibleForTesting;
 import io.functionmesh.compute.MeshWorkerService;
 import io.functionmesh.compute.models.MeshWorkerServiceCustomConfig;
 import io.functionmesh.compute.sources.models.V1alpha1Source;
@@ -54,7 +55,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.Call;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.broker.authentication.AuthenticationDataHttps;
 import org.apache.pulsar.broker.authentication.AuthenticationDataSource;
@@ -182,15 +182,7 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
         try {
             this.upsertSource(tenant, namespace, sourceName, sourceConfig, v1alpha1Source,
                     clientAuthenticationDataHttps);
-            Call call = worker().getCustomObjectsApi().createNamespacedCustomObjectCall(
-                    API_GROUP, apiVersion, worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Source,
-                    null,
-                    null,
-                    null,
-                    null);
-            executeCall(call, V1alpha1Source.class);
+            extractResponse(getResourceApi().create(v1alpha1Source));
         } catch (RestException restException) {
             log.error(
                     "register {}/{}/{} source failed",
@@ -248,37 +240,21 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
                             sourceConfig,
                             this.meshWorkerServiceSupplier.get().getConnectorsManager(),
                             cluster, worker());
-            Call getCall = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Source.getMetadata().getName(),
-                    null
-            );
-            V1alpha1Source oldRes = executeCall(getCall, V1alpha1Source.class);
-            if (oldRes.getMetadata() == null || oldRes.getMetadata().getLabels() == null) {
+
+            String nameSpaceName = worker().getJobNamespace();
+            String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, sourceName);
+            V1alpha1Source v1alpha1SourcePre = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+            if (v1alpha1SourcePre.getMetadata() == null || v1alpha1SourcePre.getMetadata().getLabels() == null) {
                 log.error("update {}/{}/{} source failed, the source resource cannot be found", tenant, namespace,
                         sourceName);
                 throw new RestException(Response.Status.NOT_FOUND, "This source resource was not found");
             }
 
             v1alpha1Source.getMetadata().setNamespace(worker().getJobNamespace());
-            v1alpha1Source.getMetadata().setResourceVersion(oldRes.getMetadata().getResourceVersion());
+            v1alpha1Source.getMetadata().setResourceVersion(v1alpha1SourcePre.getMetadata().getResourceVersion());
             this.upsertSource(tenant, namespace, sourceName, sourceConfig, v1alpha1Source,
                     clientAuthenticationDataHttps);
-            Call replaceCall = worker().getCustomObjectsApi().replaceNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    v1alpha1Source.getMetadata().getName(),
-                    v1alpha1Source,
-                    null,
-                    null,
-                    null
-            );
-            executeCall(replaceCall, Object.class);
+            extractResponse(getResourceApi().update(v1alpha1Source));
         } catch (Exception e) {
             log.error("update {}/{}/{} source failed", tenant, namespace, sourceConfig, e);
             throw new RestException(Response.Status.INTERNAL_SERVER_ERROR, e.getMessage());
@@ -302,10 +278,7 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
         try {
             String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
             String nameSpaceName = worker().getJobNamespace();
-            Call call = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP, apiVersion, nameSpaceName,
-                    apiPlural, hashName, null);
-            V1alpha1Source v1alpha1Source = executeCall(call, V1alpha1Source.class);
+            V1alpha1Source v1alpha1Source = extractResponse(getResourceApi().get(nameSpaceName, hashName));
             V1alpha1SourceStatus v1alpha1SourceStatus = v1alpha1Source.getStatus();
             if (v1alpha1SourceStatus == null) {
                 log.error(
@@ -399,143 +372,14 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
                     ManagedChannel[] channel = new ManagedChannel[podsCount];
                     InstanceControlGrpc.InstanceControlFutureStub[] stub =
                             new InstanceControlGrpc.InstanceControlFutureStub[podsCount];
-                    final String finalSubdomain = subdomain;
-                    Set<CompletableFuture<InstanceCommunication.FunctionStatus>> completableFutureSet = new HashSet<>();
-                    runningPods.forEach(pod -> {
-                        String podName = KubernetesUtils.getPodName(pod);
-                        int shardId = CommonUtil.getShardIdFromPodName(podName);
-                        int podIndex = runningPods.indexOf(pod);
-                        String address = KubernetesUtils.getServiceUrl(podName, finalSubdomain, nameSpaceName);
-                        if (shardId == -1) {
-                            log.warn("shardId invalid {}", podName);
-                            return;
-                        }
-                        SourceStatus.SourceInstanceStatus sourceInstanceStatus = null;
-                        for (SourceStatus.SourceInstanceStatus ins : sourceStatus.getInstances()) {
-                            if (ins.getInstanceId() == shardId) {
-                                sourceInstanceStatus = ins;
-                                break;
-                            }
-                        }
-                        if (sourceInstanceStatus != null) {
-                            SourceInstanceStatusData sourceInstanceStatusData = sourceInstanceStatus.getStatus();
-                            V1PodStatus podStatus = pod.getStatus();
-                            if (v1alpha1Source.getSpec() != null && StringUtils.isNotEmpty(
-                                    v1alpha1Source.getSpec().getClusterName())) {
-                                sourceInstanceStatusData.setWorkerId(v1alpha1Source.getSpec().getClusterName());
-                            }
-                            if (podStatus != null) {
-                                sourceInstanceStatusData.setRunning(KubernetesUtils.isPodRunning(pod));
-                                V1ContainerStatus containerStatus =
-                                        KubernetesUtils.extractDefaultContainerStatus(pod);
-                                if (containerStatus != null) {
-                                    sourceInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
-                                } else {
-                                    log.warn("containerStatus is null, cannot get restart count for pod {}",
-                                            podName);
-                                    log.debug("existing containerStatus: {}", podStatus.getContainerStatuses());
-                                }
-                            }
-                            // get status from grpc
-                            if (channel[podIndex] == null && stub[podIndex] == null) {
-                                channel[podIndex] = ManagedChannelBuilder.forAddress(address, 9093)
-                                        .usePlaintext()
-                                        .build();
-                                stub[podIndex] = InstanceControlGrpc.newFutureStub(channel[podIndex]);
-                            }
-                            CompletableFuture<InstanceCommunication.FunctionStatus> future =
-                                    CommonUtil.getFunctionStatusAsync(stub[podIndex]);
-                            future.whenComplete((fs, e) -> {
-                                if (channel[podIndex] != null) {
-                                    log.debug("closing channel {}", podIndex);
-                                    channel[podIndex].shutdown();
-                                }
-                                if (e != null) {
-                                    log.error("Get source {}-{} status from grpc failed from namespace {}: ",
-                                            finalStatefulSetName,
-                                            shardId,
-                                            nameSpaceName,
-                                            e);
-                                    sourceInstanceStatusData.setError(e.getMessage());
-                                } else if (fs != null) {
-                                    SourcesUtil.convertFunctionStatusToInstanceStatusData(fs, sourceInstanceStatusData);
-                                }
-                            });
-                            completableFutureSet.add(future);
-                        } else {
-                            log.error(
-                                    "Get source {}-{} status failed from namespace {}, cannot find status for shardId"
-                                            + " {}",
-                                    finalStatefulSetName,
-                                    shardId,
-                                    nameSpaceName,
-                                    shardId);
-                        }
-                    });
+                    Set<CompletableFuture<InstanceCommunication.FunctionStatus>> completableFutureSet =
+                            fetchSourceStatusFromGRPC(runningPods, subdomain, statefulSetName, nameSpaceName,
+                                    sourceStatus, v1alpha1Source, channel, stub);
                     completableFutureSet.forEach(CompletableFuture::join);
                 }
                 if (!pendingPods.isEmpty()) {
-                    pendingPods.forEach(pod -> {
-                        String podName = KubernetesUtils.getPodName(pod);
-                        int shardId = CommonUtil.getShardIdFromPodName(podName);
-                        if (shardId == -1) {
-                            log.warn("shardId invalid {}", podName);
-                            return;
-                        }
-                        SourceStatus.SourceInstanceStatus sourceInstanceStatus = null;
-                        for (SourceStatus.SourceInstanceStatus ins : sourceStatus.getInstances()) {
-                            if (ins.getInstanceId() == shardId) {
-                                sourceInstanceStatus = ins;
-                                break;
-                            }
-                        }
-                        if (sourceInstanceStatus != null) {
-                            SourceInstanceStatusData sourceInstanceStatusData = sourceInstanceStatus.getStatus();
-                            V1PodStatus podStatus = pod.getStatus();
-                            if (podStatus != null) {
-                                List<V1ContainerStatus> containerStatuses = podStatus.getContainerStatuses();
-                                if (containerStatuses != null && !containerStatuses.isEmpty()) {
-                                    V1ContainerStatus containerStatus = null;
-                                    for (V1ContainerStatus s : containerStatuses) {
-                                        // TODO need more precise way to find the status
-                                        if (s.getImage().contains(v1alpha1Source.getSpec().getImage())) {
-                                            containerStatus = s;
-                                            break;
-                                        }
-                                    }
-                                    if (containerStatus != null) {
-                                        V1ContainerState state = containerStatus.getState();
-                                        if (state != null && state.getTerminated() != null) {
-                                            sourceInstanceStatusData.setError(state.getTerminated().getMessage());
-                                        } else if (state != null && state.getWaiting() != null) {
-                                            sourceInstanceStatusData.setError(state.getWaiting().getMessage());
-                                        } else {
-                                            V1ContainerState lastState = containerStatus.getLastState();
-                                            if (lastState != null && lastState.getTerminated() != null) {
-                                                sourceInstanceStatusData.setError(
-                                                        lastState.getTerminated().getMessage());
-                                            } else if (lastState != null && lastState.getWaiting() != null) {
-                                                sourceInstanceStatusData.setError(lastState.getWaiting().getMessage());
-                                            }
-                                        }
-                                        if (containerStatus.getRestartCount() != null) {
-                                            sourceInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
-                                        }
-                                    } else {
-                                        sourceInstanceStatusData.setError(podStatus.getPhase());
-                                    }
-                                }
-                            }
-                        } else {
-                            log.error(
-                                    "Get source {}-{} status failed from namespace {}, cannot find status for shardId"
-                                            + " {}",
-                                    finalStatefulSetName,
-                                    shardId,
-                                    nameSpaceName,
-                                    shardId);
-                        }
-                    });
+                    fillSourceStatusByPendingPod(pendingPods, statefulSetName, nameSpaceName, sourceStatus,
+                            v1alpha1Source);
                 }
             }
         } catch (Exception e) {
@@ -547,12 +391,12 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
     }
 
     public SourceInstanceStatusData getSourceInstanceStatus(final String tenant,
-                                                              final String namespace,
-                                                              final String sourceName,
-                                                              final String instanceId,
-                                                              final URI uri,
-                                                              final String clientRole,
-                                                              final AuthenticationDataSource dataSource) {
+                                                            final String namespace,
+                                                            final String sourceName,
+                                                            final String instanceId,
+                                                            final URI uri,
+                                                            final String clientRole,
+                                                            final AuthenticationDataSource dataSource) {
         validateSourceEnabled();
         return new SourceInstanceStatusData();
     }
@@ -562,18 +406,12 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
                                       final String componentName) {
         validateSourceEnabled();
         this.validateGetInfoRequestParams(tenant, namespace, componentName, apiKind);
-        String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
-        try {
-            Call call = worker().getCustomObjectsApi().getNamespacedCustomObjectCall(
-                    API_GROUP,
-                    apiVersion,
-                    worker().getJobNamespace(),
-                    apiPlural,
-                    hashName,
-                    null
-            );
 
-            V1alpha1Source v1alpha1Source = executeCall(call, V1alpha1Source.class);
+        try {
+            String nameSpaceName = worker().getJobNamespace();
+            String hashName = CommonUtil.generateObjectName(worker(), tenant, namespace, componentName);
+            V1alpha1Source v1alpha1Source = extractResponse(getResourceApi().get(nameSpaceName, hashName));
+
             return SourcesUtil.createSourceConfigFromV1alpha1Source(tenant, namespace, componentName, v1alpha1Source);
         } catch (Exception e) {
             log.error("Get source info {}/{}/{} {} failed", tenant, namespace, componentName, apiPlural, e);
@@ -784,5 +622,158 @@ public class SourcesImpl extends MeshComponentImpl<V1alpha1Source, V1alpha1Sourc
             log.error("get source pods failed, {}/{}/{}", tenant, namespace, componentName, e);
         }
         return podList;
+    }
+
+    @VisibleForTesting
+    protected Set<CompletableFuture<InstanceCommunication.FunctionStatus>> fetchSourceStatusFromGRPC(List<V1Pod> pods,
+                                                                                                   String subdomain,
+                                                                                                   String statefulSetName,
+                                                                                                   String nameSpaceName,
+                                                                                                   SourceStatus sourceStatus,
+                                                                                                   V1alpha1Source v1alpha1Source,
+                                                                                                   ManagedChannel[] channel,
+                                                                                                   InstanceControlGrpc.InstanceControlFutureStub[] stub) {
+        Set<CompletableFuture<InstanceCommunication.FunctionStatus>> completableFutureSet = new HashSet<>();
+        pods.forEach(pod -> {
+            String podName = KubernetesUtils.getPodName(pod);
+            int shardId = CommonUtil.getShardIdFromPodName(podName);
+            int podIndex = pods.indexOf(pod);
+            String address = KubernetesUtils.getServiceUrl(podName, subdomain, nameSpaceName);
+            if (shardId == -1) {
+                log.warn("shardId invalid {}", podName);
+                return;
+            }
+            SourceStatus.SourceInstanceStatus sourceInstanceStatus = null;
+            for (SourceStatus.SourceInstanceStatus ins : sourceStatus.getInstances()) {
+                if (ins.getInstanceId() == shardId) {
+                    sourceInstanceStatus = ins;
+                    break;
+                }
+            }
+            if (sourceInstanceStatus != null) {
+                SourceInstanceStatusData sourceInstanceStatusData = sourceInstanceStatus.getStatus();
+                V1PodStatus podStatus = pod.getStatus();
+                if (v1alpha1Source.getSpec() != null && StringUtils.isNotEmpty(
+                        v1alpha1Source.getSpec().getClusterName())) {
+                    sourceInstanceStatusData.setWorkerId(v1alpha1Source.getSpec().getClusterName());
+                }
+                if (podStatus != null) {
+                    sourceInstanceStatusData.setRunning(KubernetesUtils.isPodRunning(pod));
+                    V1ContainerStatus containerStatus =
+                            KubernetesUtils.extractDefaultContainerStatus(pod);
+                    if (containerStatus != null) {
+                        sourceInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
+                    } else {
+                        log.warn("containerStatus is null, cannot get restart count for pod {}",
+                                podName);
+                        log.debug("existing containerStatus: {}", podStatus.getContainerStatuses());
+                    }
+                }
+                // get status from grpc
+                if (channel[podIndex] == null && stub[podIndex] == null) {
+                    channel[podIndex] = ManagedChannelBuilder.forAddress(address, 9093)
+                            .usePlaintext()
+                            .build();
+                    stub[podIndex] = InstanceControlGrpc.newFutureStub(channel[podIndex]);
+                }
+                CompletableFuture<InstanceCommunication.FunctionStatus> future =
+                        CommonUtil.getFunctionStatusAsync(stub[podIndex]);
+                future.whenComplete((fs, e) -> {
+                    if (channel[podIndex] != null) {
+                        log.debug("closing channel {}", podIndex);
+                        channel[podIndex].shutdown();
+                    }
+                    if (e != null) {
+                        log.error("Get source {}-{} status from grpc failed from namespace {}: ",
+                                statefulSetName,
+                                shardId,
+                                nameSpaceName,
+                                e);
+                        sourceInstanceStatusData.setError(e.getMessage());
+                    } else if (fs != null) {
+                        SourcesUtil.convertFunctionStatusToInstanceStatusData(fs, sourceInstanceStatusData);
+                    }
+                });
+                completableFutureSet.add(future);
+            } else {
+                log.error(
+                        "Get source {}-{} status failed from namespace {}, cannot find status for shardId"
+                                + " {}",
+                        statefulSetName,
+                        shardId,
+                        nameSpaceName,
+                        shardId);
+            }
+        });
+        return completableFutureSet;
+    }
+
+    @VisibleForTesting
+    protected void fillSourceStatusByPendingPod(List<V1Pod> pods,
+                                              String statefulSetName,
+                                              String nameSpaceName,
+                                              SourceStatus sourceStatus,
+                                              V1alpha1Source v1alpha1Source) {
+        pods.forEach(pod -> {
+            String podName = KubernetesUtils.getPodName(pod);
+            int shardId = CommonUtil.getShardIdFromPodName(podName);
+            if (shardId == -1) {
+                log.warn("shardId invalid {}", podName);
+                return;
+            }
+            SourceStatus.SourceInstanceStatus sourceInstanceStatus = null;
+            for (SourceStatus.SourceInstanceStatus ins : sourceStatus.getInstances()) {
+                if (ins.getInstanceId() == shardId) {
+                    sourceInstanceStatus = ins;
+                    break;
+                }
+            }
+            if (sourceInstanceStatus != null) {
+                SourceInstanceStatusData sourceInstanceStatusData = sourceInstanceStatus.getStatus();
+                V1PodStatus podStatus = pod.getStatus();
+                if (podStatus != null) {
+                    List<V1ContainerStatus> containerStatuses = podStatus.getContainerStatuses();
+                    if (containerStatuses != null && !containerStatuses.isEmpty()) {
+                        V1ContainerStatus containerStatus = null;
+                        for (V1ContainerStatus s : containerStatuses) {
+                            // TODO need more precise way to find the status
+                            if (s.getImage().contains(v1alpha1Source.getSpec().getImage())) {
+                                containerStatus = s;
+                                break;
+                            }
+                        }
+                        if (containerStatus != null) {
+                            V1ContainerState state = containerStatus.getState();
+                            if (state != null && state.getTerminated() != null) {
+                                sourceInstanceStatusData.setError(state.getTerminated().getMessage());
+                            } else if (state != null && state.getWaiting() != null) {
+                                sourceInstanceStatusData.setError(state.getWaiting().getMessage());
+                            } else {
+                                V1ContainerState lastState = containerStatus.getLastState();
+                                if (lastState != null && lastState.getTerminated() != null) {
+                                    sourceInstanceStatusData.setError(
+                                            lastState.getTerminated().getMessage());
+                                } else if (lastState != null && lastState.getWaiting() != null) {
+                                    sourceInstanceStatusData.setError(lastState.getWaiting().getMessage());
+                                }
+                            }
+                            if (containerStatus.getRestartCount() != null) {
+                                sourceInstanceStatusData.setNumRestarts(containerStatus.getRestartCount());
+                            }
+                        } else {
+                            sourceInstanceStatusData.setError(podStatus.getPhase());
+                        }
+                    }
+                }
+            } else {
+                log.error(
+                        "Get source {}-{} status failed from namespace {}, cannot find status for shardId"
+                                + " {}",
+                        statefulSetName,
+                        shardId,
+                        nameSpaceName,
+                        shardId);
+            }
+        });
     }
 }
