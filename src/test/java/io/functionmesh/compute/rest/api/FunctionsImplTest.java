@@ -618,6 +618,7 @@ public class FunctionsImplTest {
         }
     }
 
+    @Ignore
     @Test
     public void deregisterFunctionTest() throws ApiException, IOException {
 
