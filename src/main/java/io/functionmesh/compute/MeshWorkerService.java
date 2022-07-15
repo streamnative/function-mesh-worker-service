@@ -28,10 +28,14 @@ import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.apis.AppsV1Api;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import io.kubernetes.client.openapi.apis.CustomObjectsApi;
+import io.kubernetes.client.util.ClientBuilder;
 import io.kubernetes.client.util.Config;
+import io.kubernetes.client.util.KubeConfig;
+import java.io.FileReader;
 import java.io.IOException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.pulsar.broker.ServiceConfiguration;
 import org.apache.pulsar.broker.authentication.AuthenticationService;
 import org.apache.pulsar.broker.authorization.AuthorizationService;
@@ -61,6 +65,7 @@ import org.apache.pulsar.functions.worker.service.api.Workers;
 @Getter
 public class MeshWorkerService implements WorkerService {
 
+    private static final String KUBE_CONFIG_ENV = "KUBE_CONFIG";
     final PulsarWorkerService.PulsarClientCreator clientCreator;
     private volatile boolean isInitialized = false;
     private WorkerConfig workerConfig;
@@ -165,10 +170,18 @@ public class MeshWorkerService implements WorkerService {
 
     private void initKubernetesClient() throws IOException {
         try {
-            apiClient = Config.defaultClient();
-            coreV1Api = new CoreV1Api(Config.defaultClient());
-            appsV1Api = new AppsV1Api(Config.defaultClient());
-            customObjectsApi = new CustomObjectsApi(Config.defaultClient());
+            if (StringUtils.isNotEmpty(System.getenv(KUBE_CONFIG_ENV))) {
+                String kubeConfigPath = System.getenv(KUBE_CONFIG_ENV);
+                log.info("Initialization kubernetes client from config file: {}", kubeConfigPath);
+                // loading the out-of-cluster config, a kubeconfig from file-system
+                apiClient =
+                        ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
+            } else {
+                apiClient = Config.defaultClient();
+            }
+            coreV1Api = new CoreV1Api(apiClient);
+            appsV1Api = new AppsV1Api(apiClient);
+            customObjectsApi = new CustomObjectsApi(apiClient);
         } catch (java.io.IOException e) {
             log.error("Initialization kubernetes client failed", e);
             throw e;
