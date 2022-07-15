@@ -176,15 +176,12 @@ public class MeshWorkerService implements WorkerService {
                 // loading the out-of-cluster config, a kubeconfig from file-system
                 apiClient =
                         ClientBuilder.kubeconfig(KubeConfig.loadKubeConfig(new FileReader(kubeConfigPath))).build();
-                coreV1Api = new CoreV1Api(apiClient);
-                appsV1Api = new AppsV1Api(apiClient);
-                customObjectsApi = new CustomObjectsApi(apiClient);
             } else {
                 apiClient = Config.defaultClient();
-                coreV1Api = new CoreV1Api(apiClient);
-                appsV1Api = new AppsV1Api(apiClient);
-                customObjectsApi = new CustomObjectsApi(apiClient);
             }
+            coreV1Api = new CoreV1Api(apiClient);
+            appsV1Api = new AppsV1Api(apiClient);
+            customObjectsApi = new CustomObjectsApi(apiClient);
         } catch (java.io.IOException e) {
             log.error("Initialization kubernetes client failed", e);
             throw e;
