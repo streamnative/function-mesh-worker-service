@@ -90,3 +90,8 @@ docker run \
 
 cp -r $GEN_DIR/src/main/java/io/functionmesh/compute/* $DEST_DIR/src/main/java/io/functionmesh/compute/
 popd
+
+# cleanup
+docker rmi ${IMAGE_NAME}:${IMAGE_TAG}
+docker rmi ghcr.io/yue9944882/crd-model-gen-base:v1.0.0
+docker system prune --force
