@@ -1,0 +1,240 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pulsar-worker
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: pulsar-worker # has to match .spec.template.metadata.labels
+  serviceName: "pulsar-worker"
+  replicas: 1 # by default is 1
+  template:
+    metadata:
+      labels:
+        app: pulsar-worker # has to match .spec.selector.matchLabels
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: pulsar-worker
+        image: streamnative/sn-pulsar:2.9.2.24 # this image has included the mesh-worker-service.nar
+        command: ["/pulsar/bin/pulsar", "functions-worker"]
+        ports:
+        - containerPort: 6750
+          name: pulsar-worker
+        volumeMounts:
+        - name: pulsar-functions-worker
+          mountPath: /pulsar/conf/functions_worker.yml
+          subPath: functions_worker.yml
+      volumes:
+        - name: pulsar-functions-worker
+          configMap:
+            name: pulsar-functions-worker-configmap
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: pulsar-functions-worker-configmap
+  namespace: default
+data:
+  functions_worker.yml: |
+    workerId: standalone
+    workerHostname: 172.20.0.4
+    workerPort: 6750
+    workerPortTls: 6751
+    functionsWorkerServiceNarPackage: /pulsar/lib/mesh-worker-service.nar
+    configurationStoreServers: 172.20.0.4:2181
+    zooKeeperSessionTimeoutMillis: 30000
+    zooKeeperOperationTimeoutSeconds: 30
+    numFunctionPackageReplicas: 1
+    downloadDirectory: download/pulsar_functions
+    useTls: false
+    pulsarServiceUrl: pulsar://172.20.0.4:6650
+    pulsarWebServiceUrl: http://172.20.0.4:8080
+    pulsarFunctionsNamespace: public/functions
+    pulsarFunctionsCluster: standalone
+    functionMetadataTopicName: metadata
+    clusterCoordinationTopicName: coordinate
+    useCompactedMetadataTopic: false
+    numHttpServerThreads: 8
+    schedulerClassName: "org.apache.pulsar.functions.worker.scheduler.RoundRobinScheduler"
+    functionAssignmentTopicName: "assignments"
+    failureCheckFreqMs: 30000
+    rescheduleTimeoutMs: 60000
+    rebalanceCheckFreqSec: -1
+    initialBrokerReconnectMaxRetries: 60
+    assignmentWriteMaxRetries: 60
+    instanceLivenessCheckFreqMs: 30000
+    topicCompactionFrequencySec: 1800
+    exposeAdminClientEnabled: false
+    functionRuntimeFactoryClassName: org.apache.pulsar.functions.runtime.process.ProcessRuntimeFactory
+    functionRuntimeFactoryConfigs:
+        # location of log files for functions
+        logDirectory: logs/
+        # change the jar location only when you put the java instance jar in a different location
+        javaInstanceJarLocation:
+        # change the python instance location only when you put the python instance jar in a different location
+        pythonInstanceLocation:
+        # change the extra dependencies location:
+        extraFunctionDependenciesDir:
+    authenticationEnabled: false
+    authorizationEnabled: false
+    authenticationProviders:
+    authorizationProvider: org.apache.pulsar.broker.authorization.PulsarAuthorizationProvider
+    superUserRoles:
+    tlsEnabled: false
+    tlsCertificateFilePath:
+    tlsKeyFilePath:
+    tlsTrustCertsFilePath:
+    tlsAllowInsecureConnection: false
+    tlsEnableHostnameVerification: false
+    tlsCertRefreshCheckDurationSec: 300
+    connectorsDirectory: ./connectors
+    functionsDirectory: ./functions
+    validateConnectorConfig: false
+    initializedDlogMetadata: false
+    functionsWorkerServiceCustomConfigs:
+        functionEnabled: true
+        functionRunnerImages:
+            GO: streamnative/pulsar-functions-go-runner:2.9.2.19
+            JAVA: streamnative/pulsar-functions-java-runner:2.9.2.19
+            PYTHON: streamnative/pulsar-functions-python-runner:2.9.2.19
+        sinkEnabled: true
+        sourceEnabled: true
+        uploadEnabled: true
+        jobNamespace: default
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker-service
+  namespace: default
+spec:
+  selector:
+    app: worker-service
+  type: ClusterIP
+  ports:
+  - name: worker-service
+    protocol: TCP
+    port: 6750
+    targetPort: 6750
+---
+# https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pulsar-proxy
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: pulsar-proxy # has to match .spec.template.metadata.labels
+  serviceName: "pulsar-proxy"
+  replicas: 1 # by default is 1
+  template:
+    metadata:
+      labels:
+        app: pulsar-proxy # has to match .spec.selector.matchLabels
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: pulsar-proxy
+        image: streamnative/sn-pulsar:2.9.2.24
+        command: ["/pulsar/bin/pulsar", "proxy"]
+        ports:
+        - containerPort: 8080
+          name: proxy-web
+        - containerPort: 6650
+          name: proxy-broker
+        volumeMounts:
+        - name: pulsar-functions-proxy
+          mountPath: /pulsar/conf/proxy.conf
+          subPath: proxy.conf
+      volumes:
+        - name: pulsar-functions-proxy
+          configMap:
+            name: pulsar-functions-proxy-configmap
+---
+# https://kubernetes.io/docs/concepts/configuration/configmap/
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: pulsar-functions-proxy-configmap
+  namespace: default
+data:
+  proxy.conf: |
+    zookeeperServers=172.20.0.4:2181
+    configurationStoreServers=172.20.0.4:2181
+    brokerServiceURL=172.20.0.4:6650
+    brokerServiceURLTLS=
+    brokerWebServiceURL=172.20.0.4:8080
+    brokerWebServiceURLTLS=
+    functionWorkerWebServiceURL=http://worker-service:6750
+    functionWorkerWebServiceURLTLS=
+    zookeeperSessionTimeoutMs=30000
+    zooKeeperCacheExpirySeconds=300
+    bindAddress=0.0.0.0
+    advertisedAddress=
+    haProxyProtocolEnabled=false
+    servicePort=6650
+    servicePortTls=
+    webServicePort=8080
+    webServicePortTls=
+    statusFilePath=
+    proxyLogLevel=0
+    superUserRoles=
+    authorizationEnabled=false
+    authorizationProvider=org.apache.pulsar.broker.authorization.PulsarAuthorizationProvider
+    forwardAuthorizationCredentials=false
+    authenticationEnabled=false
+    authenticationProviders=
+    anonymousUserRole=
+    brokerClientAuthenticationPlugin=
+    brokerClientAuthenticationParameters=
+    brokerClientTrustCertsFilePath=
+    tlsEnabledWithBroker=false
+    tlsCertRefreshCheckDurationSec=300
+    maxConcurrentInboundConnections=10000
+    maxConcurrentLookupRequests=50000
+    tlsEnabledInProxy=false
+    tlsCertificateFilePath=
+    tlsKeyFilePath=
+    tlsTrustCertsFilePath=
+    tlsAllowInsecureConnection=false
+    tlsHostnameVerificationEnabled=false
+    tlsProtocols=
+    tlsCiphers=
+    tlsRequireTrustedClientCertOnConnect=false
+    httpReverseProxyConfigs=
+    httpOutputBufferSize=32768
+    httpNumThreads=
+    httpRequestsLimitEnabled=false
+    httpRequestsMaxPerSecond=100.0
+    tokenSecretKey=
+    tokenPublicKey=
+    tokenAuthClaim=
+    tokenAudienceClaim=
+    tokenAudience=
+    webSocketServiceEnabled=false
+    clusterName=pulsar-local
+    globalZookeeperServers=
+---
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: pulsar-proxy
+  namespace: default
+spec:
+  selector:
+    app: pulsar-proxy
+  type: ClusterIP
+  ports:
+  - name: proxy-web
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
+  - name: proxy-broker
+    protocol: TCP
+    port: 6650
+    targetPort: 6650
