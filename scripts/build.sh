@@ -19,7 +19,7 @@ sudo wget https://github.com/mikefarah/yq/releases/download/v4.6.0/yq_linux_amd6
 sudo chmod +x /usr/bin/yq
 yq --help
 
-docker login -u="${DOCKER_USERNAME}" -p="${DOCKER_PASSWORD}" ghcr.io
+docker login -u="${GITHUB_USERNAME}" -p="${GITHUB_TOKEN}" ghcr.io
 
 source ./scripts/generate-crd.sh
 pushd $HOMEDIR
