@@ -24,7 +24,7 @@ Replace the `YOUR-NAR-PATH` variable with your real path.
 1. Add the following configuration to the `functions_worker.yml` configuration file:
 
 ```$xslt
-functionsWorkerServiceNarPackage: /YOUR-NAR-PATH/mesh-worker-service-1.0-SNAPSHOT.nar
+functionsWorkerServiceNarPackage: /YOUR-NAR-PATH/mesh-worker-service-${VERSION}-SNAPSHOT.nar
 ```
 Replace the `YOUR-NAR-PATH` variable with your real path.
 
