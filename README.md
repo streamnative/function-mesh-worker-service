@@ -17,6 +17,30 @@ functionsWorkerServiceNarPackage: /YOUR-NAR-PATH/mesh-worker-service-1.0-SNAPSHO
 ```
 Replace the `YOUR-NAR-PATH` variable with your real path.
 
+### Run in standalone mode
+
+#### Run in docker
+
+1. Add the following configuration to the `functions_worker.yml` configuration file:
+
+```$xslt
+functionsWorkerServiceNarPackage: /YOUR-NAR-PATH/mesh-worker-service-${VERSION}-SNAPSHOT.nar
+```
+Replace the `YOUR-NAR-PATH` variable with your real path.
+
+2. Update the ZooKeeper and Broker URLs in the `functions_worker.yml` configuration file.
+
+```
+docker run -td --name worker -p 6750:6750 -v /YOUR-CONF/functions_worker.yml:/pulsar/conf/functions_worker.yml -v /YOUR-NAR-PATH/:/ANY-PATH apachepulsar/pulsar:2.9.2 bin/pulsar functions-worker
+```
+
+To run the Function Mesh Worker service in standalone mode, you should start a Pulsar proxy. For details, see [configure-proxies](https://pulsar.apache.org/docs/next/functions-worker-run-separately#configure-proxies-for-standalone-function-workers).
+
+
+#### Run in k8s
+
+For details, see a sample [YAML file](./examples/standalone.yaml). You can update the configuration based on your requirement and apply it.
+
 
 ### Configuring the development environment
 
